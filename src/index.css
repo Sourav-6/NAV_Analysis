@@ -1,0 +1,221 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  /* Ultra-minimalistic Modern Fintech Theme */
+  --bg-color: #000000;
+  --panel-bg: #0a0a0a;
+  --panel-border: #1f1f1f;
+  --panel-border-hover: #333333;
+  --text-primary: #ededed;
+  --text-secondary: #888888;
+  --accent-primary: #ffffff;
+  --accent-secondary: #cccccc;
+  --success: #10b981;
+  --danger: #ef4444;
+  --brand-blue: #0070f3;
+
+  /* Quartile Cell Colors (Subtle variants) */
+  --q1-bg: rgba(16, 185, 129, 0.1);
+  --q1-bg-solid: #021a12;
+  --q1-text: #34d399;
+  --q2-bg: rgba(59, 130, 246, 0.1);
+  --q2-bg-solid: #06152a;
+  --q2-text: #60a5fa;
+  --q3-bg: rgba(245, 158, 11, 0.1);
+  --q3-bg-solid: #1a1101;
+  --q3-text: #fbbf24;
+  --q4-bg: rgba(239, 68, 68, 0.1);
+  --q4-bg-solid: #1a0707;
+  --q4-text: #f87171;
+
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Surface Panel Utility */
+.glass-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: var(--spacing-xl);
+  transition: border-color 0.2s ease;
+}
+
+.glass-panel:hover {
+  border-color: var(--panel-border-hover);
+}
+
+/* Typography Utilities */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.text-gradient {
+  /* Removing gradient in favor of clean solid text */
+  color: var(--text-primary);
+}
+
+/* Button Styles */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  font-family: inherit;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn:hover {
+  color: var(--text-primary);
+}
+
+.btn-primary {
+  background: var(--text-primary);
+  color: var(--bg-color);
+  border: 1px solid var(--text-primary);
+}
+
+.btn-primary:hover {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+/* Input Styles */
+.input-group {
+  position: relative;
+  width: 100%;
+}
+
+.input-field {
+  width: 100%;
+  background: var(--bg-color);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.875rem;
+  transition: border-color 0.15s ease;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--text-secondary);
+}
+
+/* Scrollbar customization */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-color);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--panel-border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* Layout Utilities */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--spacing-xl) var(--spacing-lg);
+}
+
+.flex { display: flex; }
+.flex-col { display: flex; flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.gap-sm { gap: var(--spacing-sm); }
+.gap-md { gap: var(--spacing-md); }
+.gap-lg { gap: var(--spacing-lg); }
+
+/* Spreadsheet Table Styles */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--bg-color);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: right;
+  font-size: 0.875rem;
+}
+
+.data-table th,
+.data-table td {
+  border-bottom: 1px solid var(--panel-border);
+  padding: 12px 16px;
+  white-space: nowrap;
+}
+
+.data-table th {
+  background: var(--panel-bg);
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: capitalize;
+  font-size: 0.75rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.data-table td.scheme-name {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: var(--bg-color);
+  color: var(--text-primary);
+  font-weight: 500;
+  z-index: 5;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-right: 1px solid var(--panel-border);
+}
+
+.data-table td.cell-value {
+  font-weight: 400;
+}

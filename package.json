@@ -1,0 +1,35 @@
+{
+  "name": "navanalysis",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "fetch-data": "node scripts/fetch-all-nav.js",
+    "update-data": "node scripts/fetch-all-nav.js --update",
+    "server": "node scripts/server.js",
+    "dev:full": "concurrently --names \"SERVER,VITE\" --prefix-colors \"green,cyan\" \"node scripts/server.js\" \"npm run dev\""
+  },
+  "dependencies": {
+    "concurrently": "^9.1.2",
+    "cors": "^2.8.5",
+    "date-fns": "^4.4.0",
+    "express": "^5.1.0",
+    "lucide-react": "^1.23.0",
+    "puppeteer": "^25.3.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "recharts": "^3.9.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "oxlint": "^1.71.0",
+    "vite": "^8.1.1"
+  }
+}

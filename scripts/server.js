@@ -147,9 +147,8 @@ app.get('/api/schemes/category/:category', (req, res) => {
       
       let matchesCategory = false;
       if (category === 'sif') {
-        matchesCategory = name.includes('special') || 
-                          name.includes('sector rotation') || 
-                          name.includes('business cycle');
+        const sifKeywords = ['special', 'sector', 'business cycle', 'pharma', 'health', 'bank', 'financial', 'infra', 'consum', 'tech', 'auto', 'manufacturing', 'psu', 'esg', 'quant', 'thematic'];
+        matchesCategory = sifKeywords.some(kw => name.includes(kw));
       } else {
         matchesCategory = keywords.every(kw => name.includes(kw));
       }

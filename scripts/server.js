@@ -148,8 +148,7 @@ app.get('/api/schemes/category/:category', (req, res) => {
       
       let matchesCategory = false;
       if (category === 'sif') {
-        const sifKeywords = ['special', 'sector', 'business cycle', 'pharma', 'health', 'bank', 'financial', 'infra', 'consum', 'tech', 'auto', 'manufacturing', 'psu', 'esg', 'quant', 'thematic'];
-        matchesCategory = sifKeywords.some(kw => name.includes(kw) || schemeCat.includes(kw));
+        matchesCategory = schemeCat.includes('specialized investment fund');
       } else if (category === 'large cap') {
         matchesCategory = schemeCat.includes('large') && schemeCat.includes('cap') && !schemeCat.includes('mid');
       } else if (category === 'mid cap') {

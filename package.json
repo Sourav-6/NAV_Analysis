@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "fetch-data": "node scripts/fetch-all-nav.js",
     "update-data": "node scripts/fetch-all-nav.js --update",
+    "fetch-sif": "node scripts/fetch-sif-nav.js",
+    "update-sif": "node scripts/fetch-sif-nav.js --update",
     "server": "node scripts/server.js",
     "dev:full": "concurrently --names \"SERVER,VITE\" --prefix-colors \"green,cyan\" \"node scripts/server.js\" \"npm run dev\""
   },

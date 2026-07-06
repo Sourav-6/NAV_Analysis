@@ -57,22 +57,22 @@
   --accent-primary: #000000;
   --accent-secondary: #4b5563;
 
-  /* Quartile Cell Colors (Premium Translucent Heatmap for Light Mode) */
-  --q1-bg: rgba(16, 185, 129, 0.1);
-  --q1-bg-solid: rgba(16, 185, 129, 0.15);
-  --q1-text: #059669; /* Darker Emerald for contrast */
+  /* Quartile Cell Colors (Solid Premium Pastels for Light Mode) */
+  --q1-bg: #dcfce7;
+  --q1-bg-solid: #dcfce7; /* Light Green */
+  --q1-text: #166534; /* Deeper Green */
   
-  --q2-bg: rgba(132, 204, 22, 0.1);
-  --q2-bg-solid: rgba(132, 204, 22, 0.15);
-  --q2-text: #65a30d; /* Darker Lime */
+  --q2-bg: #ecfccb;
+  --q2-bg-solid: #ecfccb; /* Light Lime */
+  --q2-text: #3f6212; /* Deeper Lime */
   
-  --q3-bg: rgba(245, 158, 11, 0.1);
-  --q3-bg-solid: rgba(245, 158, 11, 0.15);
-  --q3-text: #d97706; /* Darker Amber */
+  --q3-bg: #ffedd5;
+  --q3-bg-solid: #ffedd5; /* Light Orange */
+  --q3-text: #9a3412; /* Deeper Orange */
   
-  --q4-bg: rgba(239, 68, 68, 0.1);
-  --q4-bg-solid: rgba(239, 68, 68, 0.15);
-  --q4-text: #dc2626; /* Darker Red */
+  --q4-bg: #fee2e2;
+  --q4-bg-solid: #fee2e2; /* Light Red */
+  --q4-text: #991b1b; /* Deeper Red */
 }
 
 * {

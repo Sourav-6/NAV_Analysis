@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MultiSelect from './components/MultiSelect';
 import ComparisonDashboard from './components/ComparisonDashboard';
 import CategoryView from './components/CategoryView';
-import { ArrowLeft, Database, Cloud, Clock, Moon, Sun } from 'lucide-react';
+import { Moon, Sun } from 'lucide-react';
 import { getDataStatus } from './utils/api';
 import './index.css';
 

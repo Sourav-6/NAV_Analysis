@@ -52,7 +52,7 @@ const MultiSelect = ({ selectedSchemes, onAddScheme, onRemoveScheme }) => {
       {/* Selected Tags */}
       {selectedSchemes.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
-          {selectedSchemes.map((scheme, index) => (
+          {selectedSchemes.map((scheme) => (
             <div 
               key={scheme.schemeCode}
               style={{

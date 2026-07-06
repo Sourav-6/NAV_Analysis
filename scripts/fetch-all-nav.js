@@ -133,15 +133,23 @@ function parseAMFIData(rawText) {
   const schemeMap = new Map();
   let parsedCount = 0;
   let skippedCount = 0;
+  let currentCategory = 'Unknown';
 
   for (const line of lines) {
     const trimmed = line.trim().replace(/\r$/, '');
     
-    // Skip empty lines, headers, category lines, and AMC name lines
+    // Skip empty lines, headers
     if (!trimmed) continue;
     if (trimmed.startsWith('Scheme Code;')) continue; // Header
-    if (trimmed.startsWith('Open Ended') || trimmed.startsWith('Close Ended') || trimmed.startsWith('Interval')) continue; // Category
-    if (!trimmed.includes(';')) continue; // AMC name lines or other non-data
+
+    // Check if it's a category header
+    if (trimmed.startsWith('Open Ended') || trimmed.startsWith('Close Ended') || trimmed.startsWith('Interval')) {
+      currentCategory = trimmed;
+      continue;
+    }
+    
+    // Skip AMC name lines or other non-data
+    if (!trimmed.includes(';')) continue;
 
     const parts = trimmed.split(';');
     if (parts.length < 8) continue;
@@ -165,6 +173,7 @@ function parseAMFIData(rawText) {
         schemeCode,
         schemeName,
         isin,
+        schemeCategory: currentCategory,
         navEntries: []
       });
     }
@@ -259,7 +268,8 @@ function mergeAndSaveSchemeData(schemeMap) {
       allSchemes.push({
         schemeCode: existing.schemeCode,
         schemeName: existing.schemeName,
-        isin: existing.isin
+        isin: existing.isin,
+        schemeCategory: existing.schemeCategory || 'Unknown'
       });
     } else {
       // Sort nav entries by date descending (newest first)
@@ -271,6 +281,7 @@ function mergeAndSaveSchemeData(schemeMap) {
         schemeCode: data.schemeCode,
         schemeName: data.schemeName,
         isin: data.isin,
+        schemeCategory: data.schemeCategory,
         navData: data.navEntries
       };
 
@@ -280,7 +291,8 @@ function mergeAndSaveSchemeData(schemeMap) {
       allSchemes.push({
         schemeCode: data.schemeCode,
         schemeName: data.schemeName,
-        isin: data.isin
+        isin: data.isin,
+        schemeCategory: data.schemeCategory || 'Unknown'
       });
     }
   }

@@ -100,9 +100,21 @@ export const getSchemesByCategory = async (category) => { // 'Large Cap', 'Mid C
 
   return allSchemes.filter(scheme => {
     const name = scheme.schemeName.toLowerCase();
+    const schemeCat = (scheme.schemeCategory || '').toLowerCase();
     
-    // Must contain both 'large' and 'cap' (for example)
-    const matchesCategory = keywords.every(kw => name.includes(kw));
+    const normalizedCategory = category.toLowerCase();
+    
+    let matchesCategory = false;
+    if (normalizedCategory === 'large cap') {
+      matchesCategory = schemeCat.includes('large') && schemeCat.includes('cap') && !schemeCat.includes('mid');
+    } else if (normalizedCategory === 'mid cap') {
+      matchesCategory = schemeCat.includes('mid') && schemeCat.includes('cap') && !schemeCat.includes('large');
+    } else if (normalizedCategory === 'sif') {
+      const sifKeywords = ['special', 'sector', 'business cycle', 'pharma', 'health', 'bank', 'financial', 'infra', 'consum', 'tech', 'auto', 'manufacturing', 'psu', 'esg', 'quant', 'thematic'];
+      matchesCategory = sifKeywords.some(kw => name.includes(kw) || schemeCat.includes(kw));
+    } else {
+      matchesCategory = keywords.every(kw => schemeCat.includes(kw));
+    }
     
     // We only want Direct Growth plans to avoid clutter
     const isDirect = name.includes('direct');

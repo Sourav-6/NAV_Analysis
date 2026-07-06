@@ -144,13 +144,19 @@ app.get('/api/schemes/category/:category', (req, res) => {
   const results = masterSchemeList
     .filter(s => {
       const name = s.schemeName.toLowerCase();
+      const schemeCat = (s.schemeCategory || '').toLowerCase();
       
       let matchesCategory = false;
       if (category === 'sif') {
         const sifKeywords = ['special', 'sector', 'business cycle', 'pharma', 'health', 'bank', 'financial', 'infra', 'consum', 'tech', 'auto', 'manufacturing', 'psu', 'esg', 'quant', 'thematic'];
-        matchesCategory = sifKeywords.some(kw => name.includes(kw));
+        matchesCategory = sifKeywords.some(kw => name.includes(kw) || schemeCat.includes(kw));
+      } else if (category === 'large cap') {
+        matchesCategory = schemeCat.includes('large') && schemeCat.includes('cap') && !schemeCat.includes('mid');
+      } else if (category === 'mid cap') {
+        matchesCategory = schemeCat.includes('mid') && schemeCat.includes('cap') && !schemeCat.includes('large');
       } else {
-        matchesCategory = keywords.every(kw => name.includes(kw));
+        // e.g. category = 'small cap'
+        matchesCategory = keywords.every(kw => schemeCat.includes(kw));
       }
 
       const isDirect = name.includes('direct');

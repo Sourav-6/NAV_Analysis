@@ -1,33 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
 :root {
-  /* Ultra-minimalistic Modern Fintech Theme */
-  --bg-color: #000000;
-  --panel-bg: #0a0a0a;
-  --panel-border: #1f1f1f;
-  --panel-border-hover: #333333;
-  --text-primary: #ededed;
-  --text-secondary: #888888;
-  --accent-primary: #ffffff;
-  --accent-secondary: #cccccc;
+  /* Common variables */
   --success: #10b981;
   --danger: #ef4444;
   --brand-blue: #0070f3;
-
-  /* Quartile Cell Colors (Solid Performance Heatmap) */
-  --q1-bg: rgba(16, 185, 129, 0.1);
-  --q1-bg-solid: #15803d; /* Solid Green */
-  --q1-text: #ffffff; 
-  --q2-bg: rgba(132, 204, 22, 0.1);
-  --q2-bg-solid: #84cc16; /* Solid Lime/Light Green */
-  --q2-text: #000000; 
-  --q3-bg: rgba(245, 158, 11, 0.1);
-  --q3-bg-solid: #f59e0b; /* Solid Orange */
-  --q3-text: #000000; 
-  --q4-bg: rgba(239, 68, 68, 0.1);
-  --q4-bg-solid: #dc2626; /* Solid Red */
-  --q4-text: #ffffff; 
-
+  
   /* Spacing */
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
@@ -37,6 +15,64 @@
 
   /* Typography */
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+[data-theme="dark"] {
+  /* Ultra-minimalistic Modern Fintech Theme (Dark) */
+  --bg-color: #000000;
+  --panel-bg: #0a0a0a;
+  --panel-border: #1f1f1f;
+  --panel-border-hover: #333333;
+  --text-primary: #ededed;
+  --text-secondary: #888888;
+  --accent-primary: #ffffff;
+  --accent-secondary: #cccccc;
+
+  /* Quartile Cell Colors (Premium Translucent Heatmap for Dark Mode) */
+  --q1-bg: rgba(16, 185, 129, 0.15);
+  --q1-bg-solid: rgba(16, 185, 129, 0.15); /* Subtle Emerald Glow */
+  --q1-text: #34d399; /* Vibrant Emerald */
+  
+  --q2-bg: rgba(132, 204, 22, 0.1);
+  --q2-bg-solid: rgba(132, 204, 22, 0.1); /* Subtle Lime Glow */
+  --q2-text: #a3e635; /* Vibrant Lime */
+  
+  --q3-bg: rgba(245, 158, 11, 0.1);
+  --q3-bg-solid: rgba(245, 158, 11, 0.1); /* Subtle Amber Glow */
+  --q3-text: #fbbf24; /* Vibrant Amber */
+  
+  --q4-bg: rgba(239, 68, 68, 0.15);
+  --q4-bg-solid: rgba(239, 68, 68, 0.15); /* Subtle Red Glow */
+  --q4-text: #f87171; /* Vibrant Red */
+}
+
+[data-theme="light"] {
+  /* Ultra-minimalistic Modern Fintech Theme (Light) */
+  --bg-color: #f9fafb;
+  --panel-bg: #ffffff;
+  --panel-border: #e5e7eb;
+  --panel-border-hover: #d1d5db;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --accent-primary: #000000;
+  --accent-secondary: #4b5563;
+
+  /* Quartile Cell Colors (Premium Translucent Heatmap for Light Mode) */
+  --q1-bg: rgba(16, 185, 129, 0.1);
+  --q1-bg-solid: rgba(16, 185, 129, 0.15);
+  --q1-text: #059669; /* Darker Emerald for contrast */
+  
+  --q2-bg: rgba(132, 204, 22, 0.1);
+  --q2-bg-solid: rgba(132, 204, 22, 0.15);
+  --q2-text: #65a30d; /* Darker Lime */
+  
+  --q3-bg: rgba(245, 158, 11, 0.1);
+  --q3-bg-solid: rgba(245, 158, 11, 0.15);
+  --q3-text: #d97706; /* Darker Amber */
+  
+  --q4-bg: rgba(239, 68, 68, 0.1);
+  --q4-bg-solid: rgba(239, 68, 68, 0.15);
+  --q4-text: #dc2626; /* Darker Red */
 }
 
 * {

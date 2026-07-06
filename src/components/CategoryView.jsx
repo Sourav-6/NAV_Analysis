@@ -3,14 +3,24 @@ import { Loader2, AlertCircle, PlusCircle } from 'lucide-react';
 import { getSchemesByCategory, getSchemeNavData } from '../utils/api';
 import { calculateAllReturns, assignQuartilesByColumn } from '../utils/returns';
 
-const CATEGORIES = ['Large Cap', 'Mid Cap', 'Small Cap', 'SIF'];
+const CATEGORY_GROUPS = {
+  'Equity': [
+    'Large Cap', 'Mid Cap', 'Small Cap', 'Large & Mid Cap', 'Flexi Cap', 'Multi Cap', 'ELSS', 'Focused Fund', 'Value Fund', 'SIF'
+  ],
+  'Debt / Fixed Income': [
+    'Liquid Fund', 'Overnight Fund', 'Money Market Fund', 'Short Duration Fund', 'Corporate Bond Fund', 'Dynamic Bond', 'Gilt Fund'
+  ],
+  'Hybrid & Other': [
+    'Dynamic Asset Allocation', 'Aggressive Hybrid Fund', 'Conservative Hybrid Fund', 'Multi Asset Allocation', 'Index Funds'
+  ]
+};
 const PERIOD_LABELS = {
   '1M': '1M', '3M': '3M', '6M': '6M', '1Y': '1Y', '3Y': '3Y', '5Y': '5Y', '10Y': '10Y',
   '1Y_AVG': '1Y Avg', '3Y_AVG': '3Y Avg', '5Y_AVG': '5Y Avg'
 };
 
 const CategoryView = ({ onSelectScheme }) => {
-  const [activeTab, setActiveTab] = useState(CATEGORIES[0]);
+  const [activeTab, setActiveTab] = useState(CATEGORY_GROUPS['Equity'][0]);
   const [tableData, setTableData] = useState([]);
   const [dynamicPeriods, setDynamicPeriods] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -104,25 +114,45 @@ const CategoryView = ({ onSelectScheme }) => {
   return (
     <div className="category-view" style={{ width: '100%', maxWidth: '1200px', margin: '0 auto' }}>
       
-      {/* Tabs */}
-      <div className="flex justify-center gap-sm" style={{ marginBottom: 'var(--spacing-xl)', flexWrap: 'wrap' }}>
-        {CATEGORIES.map(category => (
-          <button
-            key={category}
-            className="btn"
+      {/* Dropdown Selector */}
+      <div className="flex justify-center" style={{ marginBottom: 'var(--spacing-xl)' }}>
+        <div style={{ position: 'relative', width: '300px' }}>
+          <select
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value)}
             style={{
-              padding: '10px 20px',
-              fontSize: '0.9rem',
-              backgroundColor: activeTab === category ? 'var(--panel-bg)' : 'transparent',
-              color: activeTab === category ? 'var(--text-primary)' : 'var(--text-secondary)',
-              border: `1px solid ${activeTab === category ? 'var(--panel-border)' : 'transparent'}`,
-              borderRadius: '6px'
+              width: '100%',
+              padding: '12px 16px',
+              fontSize: '1rem',
+              backgroundColor: 'var(--panel-bg)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--panel-border)',
+              borderRadius: '8px',
+              outline: 'none',
+              cursor: 'pointer',
+              appearance: 'none',
+              WebkitAppearance: 'none'
             }}
-            onClick={() => setActiveTab(category)}
           >
-            {category}
-          </button>
-        ))}
+            {Object.entries(CATEGORY_GROUPS).map(([groupName, categories]) => (
+              <optgroup key={groupName} label={groupName} style={{ backgroundColor: 'var(--bg-color)' }}>
+                {categories.map(category => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <div style={{
+            position: 'absolute',
+            right: '16px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            pointerEvents: 'none',
+            color: 'var(--text-secondary)'
+          }}>
+            ▼
+          </div>
+        </div>
       </div>
 
       {/* Loading State */}
@@ -207,17 +237,20 @@ const CategoryView = ({ onSelectScheme }) => {
                     </div>
                   </td>
                   {dynamicPeriods.map(p => {
-                    const q = scheme.quartiles[p] || 4; // Default to bottom if missing
+                    const val = scheme.returns[p];
+                    const isMissing = val === -Infinity || val === undefined || isNaN(val);
+                    const q = scheme.quartiles[p] || 4; 
+                    
                     return (
                       <td 
                         key={p} 
                         className={`cell-value`}
                         style={{
-                          backgroundColor: `var(--q${q}-bg-solid)`,
-                          color: `var(--q${q}-text)`
+                          backgroundColor: isMissing ? 'transparent' : `var(--q${q}-bg-solid)`,
+                          color: isMissing ? 'var(--text-secondary)' : `var(--q${q}-text)`
                         }}
                       >
-                        {formatReturn(scheme.returns[p])}
+                        {formatReturn(val)}
                       </td>
                     );
                   })}

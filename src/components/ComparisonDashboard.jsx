@@ -8,7 +8,7 @@ const COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4',
 ];
 
-const ComparisonDashboard = ({ schemes }) => {
+const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
   const [navDataMap, setNavDataMap] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [timeframe, setTimeframe] = useState('ALL'); 
@@ -191,27 +191,29 @@ const ComparisonDashboard = ({ schemes }) => {
       seriesMap.current = {};
     }
 
+    const isDark = theme === 'dark';
+
     let chart;
     try {
       chart = createChart(chartContainerRef.current, {
         layout: {
           background: { type: 'solid', color: 'transparent' },
-          textColor: '#888888',
+          textColor: isDark ? '#888888' : '#6b7280',
           attributionLogo: false,
         },
         grid: {
-          vertLines: { color: '#1f1f1f' },
-          horzLines: { color: '#1f1f1f' },
+          vertLines: { color: isDark ? '#1f1f1f' : '#e5e7eb' },
+          horzLines: { color: isDark ? '#1f1f1f' : '#e5e7eb' },
         },
         crosshair: {
           mode: CrosshairMode.Magnet,
         },
         rightPriceScale: {
-          borderColor: '#1f1f1f',
+          borderColor: isDark ? '#1f1f1f' : '#e5e7eb',
           scaleMargins: { top: 0.1, bottom: 0.1 },
         },
         timeScale: {
-          borderColor: '#1f1f1f',
+          borderColor: isDark ? '#1f1f1f' : '#e5e7eb',
           timeVisible: true,
         },
         autoSize: true,
@@ -256,7 +258,7 @@ const ComparisonDashboard = ({ schemes }) => {
         const dataPoint = mergedDataMap[dateStr];
         if (!dataPoint) return;
 
-        let html = `<div style="font-weight:600; margin-bottom:8px; border-bottom:1px solid #333; padding-bottom:4px;">${dataPoint.originalDate}</div>`;
+        let html = `<div style="font-weight:600; margin-bottom:8px; border-bottom:1px solid var(--panel-border); padding-bottom:4px; color:var(--text-primary);">${dataPoint.originalDate}</div>`;
         
         schemes.forEach((scheme, index) => {
           const code = String(scheme.schemeCode);
@@ -301,7 +303,7 @@ const ComparisonDashboard = ({ schemes }) => {
         seriesMap.current = {};
       }
     };
-  }, [seriesData, mergedDataMap, schemes, isIndexed]);
+  }, [seriesData, mergedDataMap, schemes, isIndexed, theme]);
 
   const rollingStats = useMemo(() => {
     if (Object.keys(navDataMap).length === 0) return [];
@@ -409,13 +411,13 @@ const ComparisonDashboard = ({ schemes }) => {
               position: 'absolute',
               display: 'none',
               padding: '12px',
-              backgroundColor: '#0a0a0a',
-              border: '1px solid #333333',
+              backgroundColor: 'var(--panel-bg)',
+              border: '1px solid var(--panel-border)',
               borderRadius: '6px',
-              color: '#ededed',
+              color: 'var(--text-primary)',
               zIndex: 100,
               pointerEvents: 'none',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+              boxShadow: theme === 'dark' ? '0 4px 12px rgba(0,0,0,0.5)' : '0 4px 12px rgba(0,0,0,0.1)',
               minWidth: '200px'
             }}
           />

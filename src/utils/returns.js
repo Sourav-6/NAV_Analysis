@@ -181,7 +181,17 @@ export const assignQuartilesByColumn = (schemes) => {
   });
   
   // Sort overall list by 1Y return descending for better readability
-  schemes.sort((a, b) => (b.returns['1Y'] || -Infinity) - (a.returns['1Y'] || -Infinity));
+  schemes.sort((a, b) => {
+    const valA = a.returns['1Y'];
+    const valB = b.returns['1Y'];
+    const hasA = valA !== undefined && valA !== -Infinity && !isNaN(valA);
+    const hasB = valB !== undefined && valB !== -Infinity && !isNaN(valB);
+    
+    if (hasA && hasB) return valB - valA;
+    if (hasA) return -1;
+    if (hasB) return 1;
+    return 0;
+  });
 
   // Assign overall quartile based on the sorted 1Y return rank
   const totalSchemes = schemes.length;

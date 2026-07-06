@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MultiSelect from './components/MultiSelect';
 import ComparisonDashboard from './components/ComparisonDashboard';
 import CategoryView from './components/CategoryView';
-import { ArrowLeft, Database, Cloud, Clock } from 'lucide-react';
+import { ArrowLeft, Database, Cloud, Clock, Moon, Sun } from 'lucide-react';
 import { getDataStatus } from './utils/api';
 import './index.css';
 
@@ -11,6 +11,17 @@ function App() {
   const [dataStatus, setDataStatus] = useState(null);
   const [showGraph, setShowGraph] = useState(false);
   const [isSplitView, setIsSplitView] = useState(true);
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
 
   useEffect(() => {
     getDataStatus().then(setDataStatus);
@@ -33,12 +44,32 @@ function App() {
   return (
     <div className="container">
       <header style={{ marginBottom: 'var(--spacing-xl)', borderBottom: '1px solid var(--panel-border)', paddingBottom: '24px' }}>
-        <h1 style={{ fontSize: '2.5rem', letterSpacing: '-0.04em', marginBottom: '8px' }}>
-          NAV Analytics
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', maxWidth: '600px' }}>
-          Compare performance and historical NAV data across multiple mutual funds instantly using your locally cached dataset.
-        </p>
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 style={{ fontSize: '2.5rem', letterSpacing: '-0.04em', marginBottom: '8px' }}>
+              NAV Analytics
+            </h1>
+            <p style={{ color: 'var(--text-secondary)', maxWidth: '600px' }}>
+              Compare performance and historical NAV data across multiple mutual funds instantly using your locally cached dataset.
+            </p>
+          </div>
+          
+          <button 
+            className="btn flex items-center justify-center"
+            style={{
+              padding: '8px',
+              borderRadius: '50%',
+              background: 'var(--panel-bg)',
+              border: '1px solid var(--panel-border)',
+              color: 'var(--text-primary)',
+              cursor: 'pointer'
+            }}
+            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+        </div>
 
         {/* Data Source Status Badge */}
         {dataStatus && (
@@ -127,7 +158,7 @@ function App() {
                    </button>
                  </div>
                </div>
-               <ComparisonDashboard schemes={selectedSchemes} />
+               <ComparisonDashboard schemes={selectedSchemes} theme={theme} />
             </div>
           )}
 
@@ -186,7 +217,7 @@ function App() {
                 Comparison
               </h2>
             </div>
-            <ComparisonDashboard schemes={selectedSchemes} />
+            <ComparisonDashboard schemes={selectedSchemes} theme={theme} />
           </div>
         )}
       </main>

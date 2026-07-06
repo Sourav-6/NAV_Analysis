@@ -357,8 +357,7 @@ async function main() {
   ensureDirs();
 
   // Determine date range
-  const endDate = new Date();
-  endDate.setDate(endDate.getDate() - 1); // Yesterday (today's NAV may not be published yet)
+  const endDate = new Date(); // Fetch up to today to get the most recent data (if published)
   
   let startDate;
 
@@ -477,13 +476,42 @@ async function main() {
 
   // Update metadata
   const navFiles = fs.readdirSync(NAV_DIR).filter(f => f.endsWith('.json'));
+  
+  let existingMetadata = {
+    totalDataPoints: 0,
+    dataRangeStart: formatDateForDisplay(startDate),
+    dataRangeEnd: formatDateForDisplay(endDate)
+  };
+  
+  if (fs.existsSync(METADATA_FILE)) {
+    try {
+      existingMetadata = JSON.parse(fs.readFileSync(METADATA_FILE, 'utf-8'));
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  const newTotalDataPoints = isUpdate 
+    ? (existingMetadata.totalDataPoints || 0) + totalDataPoints
+    : totalDataPoints;
+
+  const newStartDate = isUpdate && existingMetadata.dataRangeStart
+    ? existingMetadata.dataRangeStart
+    : formatDateForDisplay(startDate);
+
+  // Only push dataRangeEnd forward if we successfully parsed new data points.
+  // Otherwise, keep the old dataRangeEnd to avoid claiming we have data we don't.
+  const newEndDate = isUpdate
+    ? (totalDataPoints > 0 ? formatDateForDisplay(endDate) : (existingMetadata.dataRangeEnd || formatDateForDisplay(endDate)))
+    : formatDateForDisplay(endDate);
+
   const metadata = {
     lastUpdated: new Date().toISOString(),
-    lastNavDate: formatDateForDisplay(endDate),
+    lastNavDate: newEndDate,
     totalSchemes: navFiles.length,
-    totalDataPoints,
-    dataRangeStart: formatDateForDisplay(startDate),
-    dataRangeEnd: formatDateForDisplay(endDate),
+    totalDataPoints: newTotalDataPoints,
+    dataRangeStart: newStartDate,
+    dataRangeEnd: newEndDate,
     yearsOfData: YEARS_TO_FETCH
   };
   fs.writeFileSync(METADATA_FILE, JSON.stringify(metadata, null, 2));

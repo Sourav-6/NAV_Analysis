@@ -55,14 +55,18 @@ function App() {
           </div>
           
           <button 
-            className="btn flex items-center justify-center"
+            className="flex items-center justify-center"
             style={{
-              padding: '8px',
+              width: '40px',
+              height: '40px',
               borderRadius: '50%',
               background: 'var(--panel-bg)',
               border: '1px solid var(--panel-border)',
               color: 'var(--text-primary)',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              flexShrink: 0,
+              padding: 0,
+              transition: 'all 0.15s ease'
             }}
             onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
             title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}

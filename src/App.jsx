@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MultiSelect from './components/MultiSelect';
 import ComparisonDashboard from './components/ComparisonDashboard';
 import CategoryView from './components/CategoryView';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, RefreshCw } from 'lucide-react';
 import { getDataStatus } from './utils/api';
 import './index.css';
 
@@ -16,6 +16,8 @@ function App() {
     if (saved) return saved;
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
+  const [plan, setPlan] = useState('direct');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -24,8 +26,33 @@ function App() {
 
 
   useEffect(() => {
-    getDataStatus().then(setDataStatus);
+    getDataStatus().then(status => {
+      setDataStatus(status);
+      if (status?.isUpdating) setIsUpdating(true);
+    });
   }, []);
+
+  const handleUpdateData = async () => {
+    if (isUpdating) return;
+    setIsUpdating(true);
+    try {
+      await fetch('http://localhost:3001/api/data/update', { method: 'POST' });
+      
+      const poll = setInterval(async () => {
+        const res = await fetch('http://localhost:3001/api/status');
+        if (res.ok) {
+          const data = await res.json();
+          if (!data.isUpdating) {
+            clearInterval(poll);
+            window.location.reload();
+          }
+        }
+      }, 2000);
+    } catch (e) {
+      console.error(e);
+      setIsUpdating(false);
+    }
+  };
 
   const handleAddScheme = (scheme) => {
     setSelectedSchemes(prev => [...prev, scheme]);
@@ -53,26 +80,45 @@ function App() {
               Compare performance and historical NAV data across multiple mutual funds instantly using your locally cached dataset.
             </p>
           </div>
-          
-          <button 
-            className="flex items-center justify-center"
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              background: 'var(--panel-bg)',
-              border: '1px solid var(--panel-border)',
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
-              flexShrink: 0,
-              padding: 0,
-              transition: 'all 0.15s ease'
-            }}
-            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-          >
-            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
+          <div className="flex gap-sm items-center">
+            <button 
+              className="flex items-center justify-center gap-xs"
+              style={{
+                borderRadius: '8px',
+                background: 'var(--panel-bg)',
+                border: '1px solid var(--panel-border)',
+                color: isUpdating ? 'var(--text-secondary)' : 'var(--text-primary)',
+                cursor: isUpdating ? 'not-allowed' : 'pointer',
+                padding: '8px 16px',
+                fontSize: '0.85rem',
+                transition: 'all 0.15s ease'
+              }}
+              onClick={handleUpdateData}
+              disabled={isUpdating}
+            >
+              <RefreshCw size={16} style={{ animation: isUpdating ? 'spin 1s linear infinite' : 'none' }} />
+              {isUpdating ? 'Updating...' : 'Update Data'}
+            </button>
+            <button 
+              className="flex items-center justify-center"
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                background: 'var(--panel-bg)',
+                border: '1px solid var(--panel-border)',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                flexShrink: 0,
+                padding: 0,
+                transition: 'all 0.15s ease'
+              }}
+              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            >
+              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+          </div>
         </div>
 
         {/* Data Source Status Badge */}
@@ -173,8 +219,10 @@ function App() {
               </h2>
               
               {/* Toggle Buttons - shown here in Split View or when graph is hidden */}
+              <div className="flex gap-sm items-center">
+
               {selectedSchemes.length > 0 && (!showGraph || isSplitView) && (
-                <div className="flex gap-sm">
+                <div className="flex gap-sm items-center">
                   {showGraph && (
                     <button 
                       className="btn"
@@ -207,9 +255,10 @@ function App() {
                   </button>
                 </div>
               )}
+              </div>
             </div>
             
-            <CategoryView onSelectScheme={handleAddScheme} />
+            <CategoryView onSelectScheme={handleAddScheme} plan={plan} setPlan={setPlan} />
           </div>
         </div>
 

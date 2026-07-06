@@ -48,10 +48,11 @@ export const getDataStatus = async () => {
   if (local && _dataStatus) {
     return {
       source: 'local',
-      metadata: _dataStatus.metadata
+      metadata: _dataStatus.metadata,
+      isUpdating: _dataStatus.isUpdating
     };
   }
-  return { source: 'live', metadata: null };
+  return { source: 'live', metadata: null, isUpdating: false };
 };
 
 // ── Scheme List ──────────────────────────────────────────────────────────────
@@ -81,13 +82,13 @@ export const fetchAllSchemes = async () => {
  * Returns filtered list of schemes for a given category.
  * Enforces "Direct" and "Growth" to remove duplicate variants.
  */
-export const getSchemesByCategory = async (category) => { // 'Large Cap', 'Mid Cap', 'Small Cap'
+export const getSchemesByCategory = async (category, plan = 'direct') => { // 'Large Cap', 'Mid Cap', 'Small Cap'
   try {
     const local = await isLocalAvailable();
     
     if (local) {
       // Use the server's category endpoint (already filters Direct Growth)
-      const response = await fetch(`${LOCAL_API}/schemes/category/${encodeURIComponent(category)}`);
+      const response = await fetch(`${LOCAL_API}/schemes/category/${encodeURIComponent(category)}?plan=${encodeURIComponent(plan)}`);
       if (response.ok) return await response.json();
     }
   } catch {
@@ -116,13 +117,15 @@ export const getSchemesByCategory = async (category) => { // 'Large Cap', 'Mid C
       matchesCategory = keywords.every(kw => schemeCat.includes(kw));
     }
     
-    // We only want Direct Growth plans to avoid clutter
+    // We only want Direct or Regular Growth plans to avoid clutter
     const isDirect = name.includes('direct');
     const isGrowth = name.includes('growth');
     const isIDCW = name.includes('idcw') || name.includes('dividend');
     
+    const planMatches = plan === 'direct' ? isDirect : (!isDirect || name.includes('regular'));
+    
     // Some sanity filters to remove edge cases
-    return matchesCategory && isDirect && isGrowth && !isIDCW;
+    return matchesCategory && planMatches && isGrowth && !isIDCW;
   });
 };
 

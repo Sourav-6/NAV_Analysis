@@ -54,10 +54,13 @@ export const calculateAllReturns = (navData) => {
     if (!pastData) return;
     
     const pastDate = parseDate(pastData.date);
-    if (differenceInDays(period.targetDate, pastDate) > 15 && isAfter(period.targetDate, pastDate)) {
-        const oldestDate = parseDate(navData[navData.length - 1].date);
-        if (isBefore(period.targetDate, oldestDate)) return;
-    }
+    const oldestDate = parseDate(navData[navData.length - 1].date);
+    
+    // If the required period target date is before the fund even existed, we cannot calculate this return
+    if (isBefore(period.targetDate, oldestDate)) return;
+    
+    // If the closest date found is more than 15 days away from our target date, the data is too sparse
+    if (Math.abs(differenceInDays(period.targetDate, pastDate)) > 15) return;
 
     results[period.key] = calculateReturn(latestNav, pastData.nav, period.years);
   });
@@ -112,10 +115,10 @@ export const calculateTrailingReturns = (navData) => {
     if (!pastData) return { label: period.label, value: 'N/A' };
     
     const pastDate = parseDate(pastData.date);
-    if (differenceInDays(period.targetDate, pastDate) > 15 && isAfter(period.targetDate, pastDate)) {
-        const oldestDate = parseDate(navData[navData.length - 1].date);
-        if (isBefore(period.targetDate, oldestDate)) return { label: period.label, value: 'N/A' };
-    }
+    const oldestDate = parseDate(navData[navData.length - 1].date);
+    
+    if (isBefore(period.targetDate, oldestDate)) return { label: period.label, value: 'N/A' };
+    if (Math.abs(differenceInDays(period.targetDate, pastDate)) > 15) return { label: period.label, value: 'N/A' };
 
     // Use exact daily precision for maximum accuracy (accounting for leap years)
     const daysBetween = differenceInDays(latestDate, pastDate);

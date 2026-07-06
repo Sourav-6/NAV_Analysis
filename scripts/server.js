@@ -23,6 +23,7 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { exec } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -72,6 +73,8 @@ function loadData() {
   return true;
 }
 
+let isUpdating = false;
+
 // ── API Endpoints ────────────────────────────────────────────────────────────
 
 /**
@@ -86,6 +89,7 @@ app.get('/api/status', (req, res) => {
   res.json({
     status: 'ok',
     source: 'local',
+    isUpdating,
     metadata: {
       ...metadata,
       schemesInMemory: masterSchemeList.length,
@@ -137,9 +141,29 @@ app.get('/api/schemes/search', (req, res) => {
  * Returns schemes matching a category (e.g., "large cap", "mid cap")
  * Filters to Direct Growth plans only (matching existing frontend behavior)
  */
+app.post('/api/data/update', (req, res) => {
+  if (isUpdating) {
+    return res.status(400).json({ error: 'Update already in progress' });
+  }
+  isUpdating = true;
+  
+  exec('npm run update-data && npm run update-sif', { cwd: PROJECT_ROOT }, (error, stdout, stderr) => {
+    isUpdating = false;
+    if (error) {
+      console.error('Update failed:', error);
+    } else {
+      console.log('Update finished successfully. Reloading memory...');
+      loadData();
+    }
+  });
+  
+  res.json({ status: 'started' });
+});
+
 app.get('/api/schemes/category/:category', (req, res) => {
   const category = req.params.category.toLowerCase();
   const keywords = category.split(/\s+/);
+  const plan = (req.query.plan || 'direct').toLowerCase();
 
   const results = masterSchemeList
     .filter(s => {
@@ -161,7 +185,10 @@ app.get('/api/schemes/category/:category', (req, res) => {
       const isDirect = name.includes('direct');
       const isGrowth = name.includes('growth');
       const isIDCW = name.includes('idcw') || name.includes('dividend');
-      return matchesCategory && isDirect && isGrowth && !isIDCW;
+      
+      const planMatches = plan === 'direct' ? isDirect : (!isDirect || name.includes('regular'));
+
+      return matchesCategory && planMatches && isGrowth && !isIDCW;
     })
     .map(s => ({
       schemeCode: parseInt(s.schemeCode),

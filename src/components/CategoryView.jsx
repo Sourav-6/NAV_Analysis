@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Loader2, AlertCircle, PlusCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Loader2, AlertCircle, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown, Check, ChevronDown } from 'lucide-react';
 import { getSchemesByCategory, getSchemeNavData } from '../utils/api';
 import { calculateAllReturns, assignQuartilesByColumn } from '../utils/returns';
 
@@ -19,18 +19,43 @@ const PERIOD_LABELS = {
   '1Y_AVG': '1Y Avg', '3Y_AVG': '3Y Avg', '5Y_AVG': '5Y Avg'
 };
 
-const CategoryView = ({ onSelectScheme }) => {
-  const [activeTab, setActiveTab] = useState(CATEGORY_GROUPS['Equity'][0]);
+const CategoryView = ({ onSelectScheme, plan, setPlan }) => {
+  const [activeTabs, setActiveTabs] = useState([CATEGORY_GROUPS['Equity'][0]]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
   const [tableData, setTableData] = useState([]);
   const [dynamicPeriods, setDynamicPeriods] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
+  const [sortConfig, setSortConfig] = useState({ key: '1Y', direction: 'desc' });
+
+  const handleSort = (key) => {
+    let direction = 'desc';
+    if (sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
     
     const loadCategoryData = async () => {
+      if (activeTabs.length === 0) {
+        setTableData([]);
+        return;
+      }
       setIsLoading(true);
       setError(null);
       setTableData([]);
@@ -38,10 +63,17 @@ const CategoryView = ({ onSelectScheme }) => {
 
       try {
         // 1. Get filtered schemes (NO limits)
-        const targetSchemes = await getSchemesByCategory(activeTab);
+        const schemePromises = activeTabs.map(tab => getSchemesByCategory(tab, plan));
+        const resultsArray = await Promise.all(schemePromises);
+        
+        const targetSchemesMap = new Map();
+        resultsArray.flat().forEach(scheme => {
+          targetSchemesMap.set(scheme.schemeCode, scheme);
+        });
+        const targetSchemes = Array.from(targetSchemesMap.values());
         
         if (targetSchemes.length === 0) {
-          if (isMounted) setError(`No direct growth funds found for ${activeTab}.`);
+          if (isMounted) setError(`No direct growth funds found for the selected categories.`);
           return;
         }
 
@@ -104,54 +136,118 @@ const CategoryView = ({ onSelectScheme }) => {
     loadCategoryData();
     
     return () => { isMounted = false; };
-  }, [activeTab]);
+  }, [activeTabs, plan]);
 
   const formatReturn = (val) => {
     if (val === -Infinity || val === undefined || isNaN(val)) return '-';
     return val.toFixed(1);
   };
 
+  const sortedData = [...tableData].sort((a, b) => {
+    if (sortConfig.key === 'schemeName') {
+      return sortConfig.direction === 'asc' 
+        ? a.schemeName.localeCompare(b.schemeName)
+        : b.schemeName.localeCompare(a.schemeName);
+    }
+    const valA = a.returns[sortConfig.key];
+    const valB = b.returns[sortConfig.key];
+    const hasA = valA !== undefined && valA !== -Infinity && !isNaN(valA);
+    const hasB = valB !== undefined && valB !== -Infinity && !isNaN(valB);
+    if (!hasA && !hasB) return 0;
+    if (!hasA) return 1;
+    if (!hasB) return -1;
+    return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+  });
+
   return (
     <div className="category-view" style={{ width: '100%', maxWidth: '1200px', margin: '0 auto' }}>
       
-      {/* Dropdown Selector */}
-      <div className="flex justify-center" style={{ marginBottom: 'var(--spacing-xl)' }}>
-        <div style={{ position: 'relative', width: '300px' }}>
-          <select
-            value={activeTab}
-            onChange={(e) => setActiveTab(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              fontSize: '1rem',
-              backgroundColor: 'var(--panel-bg)',
-              color: 'var(--text-primary)',
-              border: '1px solid var(--panel-border)',
-              borderRadius: '8px',
-              outline: 'none',
-              cursor: 'pointer',
-              appearance: 'none',
-              WebkitAppearance: 'none'
-            }}
-          >
-            {Object.entries(CATEGORY_GROUPS).map(([groupName, categories]) => (
-              <optgroup key={groupName} label={groupName} style={{ backgroundColor: 'var(--bg-color)' }}>
-                {categories.map(category => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-          <div style={{
-            position: 'absolute',
-            right: '16px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            pointerEvents: 'none',
-            color: 'var(--text-secondary)'
-          }}>
-            ▼
+      {/* Controls Row */}
+      <div className="flex justify-center items-center gap-xl" style={{ marginBottom: 'var(--spacing-xl)', flexWrap: 'wrap' }}>
+        
+        {/* Dropdown Selector */}
+        <div className="multi-select-container" style={{ width: '300px' }} ref={dropdownRef}>
+          <div className="multi-select-header" onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
+            <span>
+              {activeTabs.length === 0 ? 'Select Category' : 
+               activeTabs.length === 1 ? activeTabs[0] : 
+               `${activeTabs.length} Categories Selected`}
+            </span>
+            <ChevronDown size={16} style={{ transform: isDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
           </div>
+          
+          {isDropdownOpen && (
+            <div className="multi-select-dropdown">
+              {Object.entries(CATEGORY_GROUPS).map(([groupName, categories]) => (
+                <div key={groupName}>
+                  <div className="multi-select-group">{groupName}</div>
+                  {categories.map(category => {
+                    const isSelected = activeTabs.includes(category);
+                    return (
+                      <div 
+                        key={category} 
+                        className={`multi-select-option ${isSelected ? 'selected' : ''}`}
+                        onClick={() => {
+                          if (isSelected) {
+                            setActiveTabs(prev => prev.filter(t => t !== category));
+                          } else {
+                            setActiveTabs(prev => [...prev, category]);
+                          }
+                        }}
+                      >
+                        <div className="multi-select-checkbox">
+                          {isSelected && <Check size={14} strokeWidth={3} />}
+                        </div>
+                        <span className="multi-select-label">{category}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Plan Toggle */}
+        <div style={{
+          display: 'flex',
+          background: 'var(--panel-bg)',
+          border: '1px solid var(--panel-border)',
+          borderRadius: '8px',
+          padding: '4px'
+        }}>
+          <button 
+            style={{
+              background: plan === 'regular' ? 'var(--panel-border)' : 'transparent',
+              color: plan === 'regular' ? 'var(--text-primary)' : 'var(--text-secondary)',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '10px 20px',
+              cursor: 'pointer',
+              fontSize: '0.9rem',
+              fontWeight: plan === 'regular' ? 500 : 400,
+              transition: 'all 0.15s ease'
+            }}
+            onClick={() => setPlan && setPlan('regular')}
+          >
+            Regular
+          </button>
+          <button 
+            style={{
+              background: plan === 'direct' ? 'var(--panel-border)' : 'transparent',
+              color: plan === 'direct' ? 'var(--text-primary)' : 'var(--text-secondary)',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '10px 20px',
+              cursor: 'pointer',
+              fontSize: '0.9rem',
+              fontWeight: plan === 'direct' ? 500 : 400,
+              transition: 'all 0.15s ease'
+            }}
+            onClick={() => setPlan && setPlan('direct')}
+          >
+            Direct
+          </button>
         </div>
       </div>
 
@@ -159,7 +255,7 @@ const CategoryView = ({ onSelectScheme }) => {
       {isLoading && (
         <div className="glass-panel flex-col items-center justify-center gap-md" style={{ padding: '40px' }}>
           <Loader2 size={40} style={{ animation: 'spin 1s linear infinite', color: 'var(--text-primary)' }} />
-          <p style={{ color: 'var(--text-secondary)' }}>Analyzing {activeTab} schemes... {progress}%</p>
+          <p style={{ color: 'var(--text-secondary)' }}>Analyzing {activeTabs.length} categories... {progress}%</p>
           <div style={{ width: '100%', maxWidth: '300px', height: '4px', background: 'var(--panel-border)', borderRadius: '2px', overflow: 'hidden' }}>
             <div style={{ width: `${progress}%`, height: '100%', background: 'var(--text-primary)', transition: 'width 0.3s ease' }} />
           </div>
@@ -176,18 +272,49 @@ const CategoryView = ({ onSelectScheme }) => {
 
       {/* Data Table */}
       {!isLoading && !error && tableData.length > 0 && (
-        <div className="table-container" style={{ maxHeight: '70vh' }}>
+        <div className="table-container" style={{ maxHeight: 'none', height: 'auto', overflowX: 'auto' }}>
           <table className="data-table">
             <thead>
               <tr>
-                <th style={{ textAlign: 'left', left: 0, zIndex: 15, background: 'var(--panel-bg)', minWidth: '300px' }}>Fund Name ({tableData.length})</th>
+                <th 
+                  className={`sortable-header ${sortConfig.key === 'schemeName' ? 'active' : ''}`}
+                  style={{ textAlign: 'left', left: 0, zIndex: 15, background: 'var(--panel-bg)', minWidth: '300px' }}
+                  onClick={() => handleSort('schemeName')}
+                >
+                  <div className="sortable-header-content">
+                    <span>Fund Name ({tableData.length})</span>
+                    <span className="sort-icon">
+                      {sortConfig.key === 'schemeName' ? (
+                        sortConfig.direction === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />
+                      ) : (
+                        <ArrowUpDown size={16} />
+                      )}
+                    </span>
+                  </div>
+                </th>
                 {dynamicPeriods.map(p => (
-                  <th key={p} style={{ background: 'var(--panel-bg)' }}>{PERIOD_LABELS[p] || p}</th>
+                  <th 
+                    key={p} 
+                    className={`sortable-header ${sortConfig.key === p ? 'active' : ''}`}
+                    style={{ background: 'var(--panel-bg)' }}
+                    onClick={() => handleSort(p)}
+                  >
+                    <div className="sortable-header-content">
+                      <span>{PERIOD_LABELS[p] || p}</span>
+                      <span className="sort-icon">
+                        {sortConfig.key === p ? (
+                          sortConfig.direction === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />
+                        ) : (
+                          <ArrowUpDown size={16} />
+                        )}
+                      </span>
+                    </div>
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {tableData.map((scheme) => (
+              {sortedData.map((scheme) => (
                 <tr 
                   key={scheme.schemeCode} 
                   style={{ 

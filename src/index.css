@@ -33,13 +33,13 @@
   --q1-bg-solid: rgba(16, 185, 129, 0.15); /* Subtle Emerald Glow */
   --q1-text: #34d399; /* Vibrant Emerald */
   
-  --q2-bg: rgba(132, 204, 22, 0.1);
-  --q2-bg-solid: rgba(132, 204, 22, 0.1); /* Subtle Lime Glow */
-  --q2-text: #a3e635; /* Vibrant Lime */
+  --q2-bg: rgba(59, 130, 246, 0.15);
+  --q2-bg-solid: rgba(59, 130, 246, 0.15); /* Subtle Blue Glow */
+  --q2-text: #60a5fa; /* Vibrant Blue */
   
-  --q3-bg: rgba(245, 158, 11, 0.1);
-  --q3-bg-solid: rgba(245, 158, 11, 0.1); /* Subtle Amber Glow */
-  --q3-text: #fbbf24; /* Vibrant Amber */
+  --q3-bg: rgba(234, 179, 8, 0.15);
+  --q3-bg-solid: rgba(234, 179, 8, 0.15); /* Subtle Yellow Glow */
+  --q3-text: #facc15; /* Vibrant Yellow */
   
   --q4-bg: rgba(239, 68, 68, 0.15);
   --q4-bg-solid: rgba(239, 68, 68, 0.15); /* Subtle Red Glow */
@@ -62,13 +62,13 @@
   --q1-bg-solid: #dcfce7; /* Light Green */
   --q1-text: #166534; /* Deeper Green */
   
-  --q2-bg: #ecfccb;
-  --q2-bg-solid: #ecfccb; /* Light Lime */
-  --q2-text: #3f6212; /* Deeper Lime */
+  --q2-bg: #dbeafe;
+  --q2-bg-solid: #dbeafe; /* Light Blue */
+  --q2-text: #1e40af; /* Deeper Blue */
   
-  --q3-bg: #ffedd5;
-  --q3-bg-solid: #ffedd5; /* Light Orange */
-  --q3-text: #9a3412; /* Deeper Orange */
+  --q3-bg: #fef9c3;
+  --q3-bg-solid: #fef9c3; /* Light Yellow */
+  --q3-text: #854d0e; /* Deeper Yellow */
   
   --q4-bg: #fee2e2;
   --q4-bg-solid: #fee2e2; /* Light Red */

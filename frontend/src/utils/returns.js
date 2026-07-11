@@ -1,5 +1,8 @@
 import { parse, subMonths, subYears, isBefore, isAfter, differenceInDays } from 'date-fns';
 
+// Configuration Constants
+export const MAX_NAV_GAP_DAYS = 5;
+
 const parseDate = (dateStr) => parse(dateStr, 'dd-MM-yyyy', new Date());
 
 const calculateReturn = (currentNav, pastNav, years) => {
@@ -59,27 +62,13 @@ export const calculateAllReturns = (navData) => {
     // If the required period target date is before the fund even existed, we cannot calculate this return
     if (isBefore(period.targetDate, oldestDate)) return;
     
-    // If the closest date found is more than 15 days away from our target date, the data is too sparse
-    if (Math.abs(differenceInDays(period.targetDate, pastDate)) > 15) return;
+    // If the closest date found is more than the allowed gap days away from our target date, the data is too sparse
+    if (Math.abs(differenceInDays(period.targetDate, pastDate)) > MAX_NAV_GAP_DAYS) return;
 
     results[period.key] = calculateReturn(latestNav, pastData.nav, period.years);
   });
 
-  // Also include Average 1-Year Rolling Returns
-  const rollingReturns = calculateAverageRollingReturns(navData);
-  if (rollingReturns) {
-    const getVal = (label) => {
-      const item = rollingReturns.find(r => r.label === label);
-      return (item && item.numericValue !== null) ? item.numericValue : -Infinity;
-    };
-    results['1Y_AVG'] = getVal('1Y Avg');
-    results['3Y_AVG'] = getVal('3Y Avg');
-    results['5Y_AVG'] = getVal('5Y Avg');
-  } else {
-    results['1Y_AVG'] = -Infinity;
-    results['3Y_AVG'] = -Infinity;
-    results['5Y_AVG'] = -Infinity;
-  }
+  // Average rolling returns removed as per request
 
   // Also include Calendar Returns
   const calendarReturns = calculateCalendarReturns(navData);
@@ -118,7 +107,7 @@ export const calculateTrailingReturns = (navData) => {
     const oldestDate = parseDate(navData[navData.length - 1].date);
     
     if (isBefore(period.targetDate, oldestDate)) return { label: period.label, value: 'N/A' };
-    if (Math.abs(differenceInDays(period.targetDate, pastDate)) > 15) return { label: period.label, value: 'N/A' };
+    if (Math.abs(differenceInDays(period.targetDate, pastDate)) > MAX_NAV_GAP_DAYS) return { label: period.label, value: 'N/A' };
 
     // Use exact daily precision for maximum accuracy (accounting for leap years)
     const daysBetween = differenceInDays(latestDate, pastDate);
@@ -211,66 +200,6 @@ export const assignQuartilesByColumn = (schemes) => {
 };
 
 /**
- * Calculates the average 1-year rolling return over the specified total periods (1Y, 3Y, 5Y).
- * This measures consistency by calculating daily 1-year returns and averaging them.
- */
-export const calculateAverageRollingReturns = (navData) => {
-  if (!navData || navData.length === 0) return null;
-
-  const calculateAvgRolling = (totalYears, windowYears) => {
-    const latestDate = parseDate(navData[0].date);
-    const oldestAllowedEnd = subYears(latestDate, totalYears - windowYears);
-    
-    let sum = 0;
-    let count = 0;
-    
-    // Two-pointer approach for O(N) performance
-    let j = 0;
-
-    for (let i = 0; i < navData.length; i++) {
-      const endDate = parseDate(navData[i].date);
-      // Only process endpoints within our observation window
-      if (isBefore(endDate, oldestAllowedEnd)) break;
-
-      const targetStartDate = subYears(endDate, windowYears);
-      
-      // Advance j until navData[j] is <= targetStartDate
-      while (j < navData.length) {
-        const pastDateObj = parseDate(navData[j].date);
-        if (isBefore(pastDateObj, targetStartDate) || pastDateObj.getTime() === targetStartDate.getTime()) {
-          break;
-        }
-        j++;
-      }
-      
-      if (j < navData.length) {
-        // Difference check (don't use dates too far off - e.g. gap of > 15 days)
-        const pastDateObj = parseDate(navData[j].date);
-        if (differenceInDays(targetStartDate, pastDateObj) <= 15) {
-          const ret = calculateReturn(navData[i].nav, navData[j].nav, windowYears);
-          sum += ret;
-          count++;
-        }
-      }
-    }
-
-    if (count === 0) return null;
-    return sum / count;
-  };
-
-  return [
-    { label: '1Y Avg', value: calculateAvgRolling(1, 1) },
-    { label: '3Y Avg', value: calculateAvgRolling(3, 1) },
-    { label: '5Y Avg', value: calculateAvgRolling(5, 1) }
-  ].map(item => ({
-    label: item.label,
-    value: item.value !== null ? item.value.toFixed(2) : 'N/A',
-    isPositive: item.value !== null && item.value >= 0,
-    numericValue: item.value
-  }));
-};
-
-/**
  * Calculates calendar year-wise returns (e.g., YTD, 2023, 2022).
  */
 export const calculateCalendarReturns = (navData) => {
@@ -303,9 +232,15 @@ export const calculateCalendarReturns = (navData) => {
     // Find the start NAV for this year (end of previous year)
     let startNavData = findClosestNav(navData, endOfPrevYearDate);
 
-    // If end of previous year is before fund inception, use inception NAV
+    // If end of previous year is before fund inception, it means the fund started IN this year.
+    // We only calculate a return if it's the CURRENT year (YTD). 
+    // Otherwise, it wasn't active for the full calendar year, so we return N/A.
     if (isAfter(oldestDate, endOfPrevYearDate)) {
-      startNavData = navData[navData.length - 1];
+      if (year === currentYear) {
+        startNavData = navData[navData.length - 1]; // Use inception NAV for YTD
+      } else {
+        return { label, value: 'N/A' }; // Don't show partial year returns for past years
+      }
     }
 
     if (!endNavData || !startNavData) {

@@ -13,15 +13,13 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import https from 'https';
+import Database from 'better-sqlite3';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(PROJECT_ROOT, 'data');
-const NAV_DIR = path.join(DATA_DIR, 'nav');
-const METADATA_FILE = path.join(DATA_DIR, 'metadata.json');
-const SCHEMES_FILE = path.join(DATA_DIR, 'schemes.json');
-const SIF_PROGRESS_FILE = path.join(DATA_DIR, '.sif-progress.json');
+const DB_PATH = path.join(DATA_DIR, 'database.sqlite');
 
 const SIF_API_URL = 'https://www.amfiindia.com/api/sif-nav-history?query_type=all_for_date&from_date=';
 const DELAY_MS = 500; // Small delay to avoid API rate limiting
@@ -98,22 +96,23 @@ async function main() {
   console.log('╠══════════════════════════════════════════════════════════════╣');
   console.log(`║  Mode: ${isUpdate ? 'INCREMENTAL UPDATE' : 'FULL DOWNLOAD (from 2024)'}                          ║`);
   console.log('╚══════════════════════════════════════════════════════════════╝');
-  console.log('');
-
-  if (!fs.existsSync(NAV_DIR)) fs.mkdirSync(NAV_DIR, { recursive: true });
-
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  
+  const db = new Database(DB_PATH);
+  
+  let startDate = new Date(DEFAULT_START_DATE);
   const endDate = new Date();
-  let startDate;
 
-  if (isUpdate && fs.existsSync(SIF_PROGRESS_FILE)) {
-    const progress = JSON.parse(fs.readFileSync(SIF_PROGRESS_FILE, 'utf-8'));
-    startDate = new Date(progress.lastSifDate);
-    startDate.setDate(startDate.getDate() + 1);
-  } else {
-    startDate = new Date(DEFAULT_START_DATE);
-  }
-
-  if (startDate >= endDate) {
+  if (isUpdate) {
+    const metaRecord = db.prepare("SELECT value FROM metadata WHERE key = 'sif_progress'").get();
+    if (metaRecord) {
+      const spg = JSON.parse(metaRecord.value);
+      startDate = new Date(spg.lastSifDate);
+      startDate.setDate(startDate.getDate() + 1); // Start from day after last fetch
+    } else {
+      console.log('⚠ No SIF progress found in DB. Running full SIF download from 2024.');
+    }
+  } if (startDate >= endDate) {
     console.log('✅ SIF Data is already up to date!');
     return;
   }
@@ -151,7 +150,10 @@ async function main() {
               if (!amfiDate) return;
 
               const navVal = parseFloat(navEntry.hNAV_Amt);
-              if (isNaN(navVal)) return;
+              const nameLower = navEntry.NAV_Name.toLowerCase();
+              const isGrowth = nameLower.includes('growth');
+              const isIDCW = nameLower.includes('idcw') || nameLower.includes('dividend');
+              if (!isGrowth || isIDCW) return;
 
               if (!schemeMap.has(schemeCode)) {
                 schemeMap.set(schemeCode, {
@@ -187,74 +189,43 @@ async function main() {
 
   console.log('');
   if (totalDataPoints > 0) {
-    console.log(`💾 Merging ${totalDataPoints} SIF data points into local JSON store...`);
+    console.log(`💾 Merging ${totalDataPoints} SIF data points into database...`);
     
     let newSchemes = 0;
     let updatedSchemes = 0;
-    const allSchemes = fs.existsSync(SCHEMES_FILE) ? JSON.parse(fs.readFileSync(SCHEMES_FILE, 'utf-8')) : [];
-    const knownCodes = new Set(allSchemes.map(s => s.schemeCode));
-
-    for (const [schemeCode, data] of schemeMap) {
-      const filePath = path.join(NAV_DIR, `${schemeCode}.json`);
-      let existing = null;
-
-      if (fs.existsSync(filePath)) {
-        try { existing = JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch (e) {}
-      }
-
-      if (existing) {
-        const existingDates = new Set(existing.navData.map(e => e.date));
-        const newEntries = data.navEntries.filter(e => !existingDates.has(e.date));
+    
+    const insertScheme = db.prepare('INSERT OR IGNORE INTO schemes (schemeCode, schemeName, isin, schemeCategory) VALUES (?, ?, ?, ?)');
+    const insertNav = db.prepare('INSERT OR IGNORE INTO nav_history (schemeCode, date, nav) VALUES (?, ?, ?)');
+    const checkSchemeExists = db.prepare('SELECT 1 FROM schemes WHERE schemeCode = ?');
+    
+    const insertMany = db.transaction((schemesData) => {
+      for (const [schemeCode, data] of schemesData) {
+        const parsedCode = parseInt(schemeCode);
         
-        if (newEntries.length > 0) {
-          existing.navData = [...existing.navData, ...newEntries];
-          existing.navData.sort((a, b) => parseDateString(b.date) - parseDateString(a.date));
-          fs.writeFileSync(filePath, JSON.stringify(existing));
+        const exists = checkSchemeExists.get(parsedCode);
+        if (!exists) {
+          insertScheme.run(parsedCode, data.schemeName, data.isin || '', data.schemeCategory || '');
+          newSchemes++;
+        } else {
           updatedSchemes++;
         }
-      } else {
-        data.navEntries.sort((a, b) => parseDateString(b.date) - parseDateString(a.date));
-        fs.writeFileSync(filePath, JSON.stringify({
-          schemeCode: data.schemeCode,
-          schemeName: data.schemeName,
-          isin: data.isin,
-          schemeCategory: data.schemeCategory,
-          navData: data.navEntries
-        }));
-        newSchemes++;
+        
+        for (const entry of data.navEntries) {
+          insertNav.run(parsedCode, entry.date, parseFloat(entry.nav));
+        }
       }
+    });
 
-      if (!knownCodes.has(schemeCode)) {
-        allSchemes.push({
-          schemeCode: data.schemeCode,
-          schemeName: data.schemeName,
-          isin: data.isin,
-          schemeCategory: data.schemeCategory
-        });
-        knownCodes.add(schemeCode);
-      }
-    }
+    insertMany(schemeMap);
 
-    // Save updated master schemes list
-    fs.writeFileSync(SCHEMES_FILE, JSON.stringify(allSchemes, null, 2));
     console.log(`  Done (${newSchemes} new SIFs, ${updatedSchemes} updated SIFs)`);
-
-    // Update metadata using recalculation script for safety
-    console.log('  Recalculating global metadata...');
-    const { execSync } = await import('child_process');
-    try {
-      execSync('node scripts/recalculate-metadata.js', { stdio: 'ignore' });
-      console.log('  Metadata updated successfully.');
-    } catch (e) {
-      console.log('  Failed to run recalculate-metadata.js automatically. Run it manually.');
-    }
   }
 
   // Save SIF progress
-  fs.writeFileSync(SIF_PROGRESS_FILE, JSON.stringify({
+  db.prepare('INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)').run('sif_progress', JSON.stringify({
     lastSifDate: formatDateForAPI(endDate),
     lastUpdated: new Date().toISOString()
-  }, null, 2));
+  }));
 
   console.log('');
   console.log('╔══════════════════════════════════════════════════════════════╗');

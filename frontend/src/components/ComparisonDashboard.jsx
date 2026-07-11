@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createChart, CrosshairMode, LineSeries } from 'lightweight-charts';
 import { Loader2 } from 'lucide-react';
 import { getSchemeNavData } from '../utils/api';
-import { calculateAverageRollingReturns, calculateCalendarReturns } from '../utils/returns';
+import { calculateCalendarReturns, calculateTrailingReturns } from '../utils/returns';
 
 const COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4',
@@ -13,6 +13,7 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [timeframe, setTimeframe] = useState('ALL'); 
   const [isIndexed, setIsIndexed] = useState(true);
+  const [viewMode, setViewMode] = useState('chart'); // 'chart' or 'table'
 
   const chartContainerRef = useRef(null);
   const tooltipRef = useRef(null);
@@ -61,8 +62,12 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
       return new Date(ay, amNum, ad) - new Date(by, bmNum, bd);
     });
 
+    const uniqueSchemesMap = new Map();
+    schemes.forEach(s => uniqueSchemesMap.set(String(s.schemeCode), s));
+    const uniqueSchemes = Array.from(uniqueSchemesMap.values());
+
     const schemeDateMaps = {};
-    schemes.forEach(scheme => {
+    uniqueSchemes.forEach(scheme => {
       const code = String(scheme.schemeCode);
       const navArray = navDataMap[code] || [];
       const map = {};
@@ -78,7 +83,7 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
       const time = `${y}-${monthStr}-${d.padStart(2, '0')}`;
       
       const point = { originalDate: dateStr, time };
-      schemes.forEach(scheme => {
+      uniqueSchemes.forEach(scheme => {
         const nav = schemeDateMaps[scheme.schemeCode]?.[dateStr];
         if (nav !== undefined) point[String(scheme.schemeCode)] = nav;
       });
@@ -105,7 +110,7 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
 
     if (isIndexed && mergedData.length > 0) {
       const firstNavs = {};
-      schemes.forEach(scheme => {
+      uniqueSchemes.forEach(scheme => {
         const code = String(scheme.schemeCode);
         for (let i = 0; i < mergedData.length; i++) {
           if (mergedData[i][code] !== undefined) {
@@ -117,7 +122,7 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
 
       mergedData = mergedData.map(point => {
         const newPoint = { ...point };
-        schemes.forEach(scheme => {
+        uniqueSchemes.forEach(scheme => {
           const code = String(scheme.schemeCode);
           if (point[code] !== undefined && firstNavs[code]) {
             newPoint[code] = parseFloat(((point[code] / firstNavs[code]) * 100).toFixed(2));
@@ -129,7 +134,7 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
     }
 
     const sData = {};
-    schemes.forEach(scheme => {
+    uniqueSchemes.forEach(scheme => {
       sData[String(scheme.schemeCode)] = [];
     });
 
@@ -141,7 +146,7 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
         mDataMap[point.time] = { time: point.time, originalDate: point.originalDate };
       }
       
-      schemes.forEach(scheme => {
+      uniqueSchemes.forEach(scheme => {
         const code = String(scheme.schemeCode);
         if (point[code] !== undefined && !isNaN(point[code]) && isFinite(point[code])) {
           mDataMap[point.time][code] = point[code];
@@ -155,7 +160,7 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
     
     uniqueTimes.forEach(time => {
       const point = mDataMap[time];
-      schemes.forEach(scheme => {
+      uniqueSchemes.forEach(scheme => {
         const code = String(scheme.schemeCode);
         if (point[code] !== undefined) {
           sData[code].push({ 
@@ -174,11 +179,17 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
     if (!chartContainerRef.current || schemes.length === 0 || Object.keys(seriesData).length === 0) return;
 
     // Check that at least one scheme has data points
-    const hasAnyData = schemes.some(s => {
+    const uniqueSchemesMap = new Map();
+    schemes.forEach(s => uniqueSchemesMap.set(String(s.schemeCode), s));
+    const uniqueSchemes = Array.from(uniqueSchemesMap.values());
+
+    const hasAnyData = uniqueSchemes.some(s => {
       const d = seriesData[String(s.schemeCode)];
       return d && d.length > 0;
     });
     if (!hasAnyData) return;
+
+    if (viewMode === 'table') return; // Skip drawing chart if in table mode
 
     try {
       if (chartInstance.current) {
@@ -221,7 +232,7 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
       chartInstance.current = chart;
       seriesMap.current = {};
 
-      schemes.forEach((scheme, index) => {
+      uniqueSchemes.forEach((scheme, index) => {
         const code = String(scheme.schemeCode);
         const data = seriesData[code];
         if (data && data.length > 0) {
@@ -260,7 +271,7 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
 
         let html = `<div style="font-weight:600; margin-bottom:8px; border-bottom:1px solid var(--panel-border); padding-bottom:4px; color:var(--text-primary);">${dataPoint.originalDate}</div>`;
         
-        schemes.forEach((scheme, index) => {
+        uniqueSchemes.forEach((scheme, index) => {
           const code = String(scheme.schemeCode);
           const val = dataPoint[code];
           const rawVal = dataPoint[`${code}_raw`] || val;
@@ -305,10 +316,10 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
     };
   }, [seriesData, mergedDataMap, schemes, isIndexed, theme]);
 
-  const rollingStats = useMemo(() => {
+  const trailingStats = useMemo(() => {
     if (Object.keys(navDataMap).length === 0) return [];
     return schemes.map(scheme => ({
-      scheme, stats: calculateAverageRollingReturns(navDataMap[scheme.schemeCode])
+      scheme, stats: calculateTrailingReturns(navDataMap[scheme.schemeCode])
     }));
   }, [navDataMap, schemes]);
 
@@ -380,6 +391,32 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
                 Raw NAV
               </button>
             </div>
+            <div className="flex gap-sm" style={{ background: 'var(--bg-color)', padding: '4px', borderRadius: '6px', border: '1px solid var(--panel-border)' }}>
+              <button 
+                className="btn"
+                style={{ 
+                  padding: '4px 12px', fontSize: '0.85rem',
+                  background: viewMode === 'chart' ? 'var(--panel-border-hover)' : 'transparent',
+                  color: viewMode === 'chart' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  border: 'none', borderRadius: '4px'
+                }}
+                onClick={() => setViewMode('chart')}
+              >
+                Chart
+              </button>
+              <button 
+                className="btn"
+                style={{ 
+                  padding: '4px 12px', fontSize: '0.85rem',
+                  background: viewMode === 'table' ? 'var(--panel-border-hover)' : 'transparent',
+                  color: viewMode === 'table' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  border: 'none', borderRadius: '4px'
+                }}
+                onClick={() => setViewMode('table')}
+              >
+                Table
+              </button>
+            </div>
           </div>
           <div className="flex gap-sm" style={{ flexWrap: 'wrap', background: 'var(--bg-color)', padding: '4px', borderRadius: '6px', border: '1px solid var(--panel-border)' }}>
             {['1M', '3M', '6M', '1Y', '3Y', '5Y', '10Y', 'ALL'].map(tf => (
@@ -400,62 +437,101 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
           </div>
         </div>
         
-        {/* TradingView Lightweight Chart Container */}
+        {/* TradingView Lightweight Chart Container OR Data Table */}
         <div style={{ position: 'relative', width: '100%', height: '450px', marginTop: '16px' }}>
-          <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }} />
-          
-          {/* Custom HTML Tooltip */}
-          <div 
-            ref={tooltipRef}
-            style={{
-              position: 'absolute',
-              display: 'none',
-              padding: '12px',
-              backgroundColor: 'var(--panel-bg)',
-              border: '1px solid var(--panel-border)',
-              borderRadius: '6px',
-              color: 'var(--text-primary)',
-              zIndex: 100,
-              pointerEvents: 'none',
-              boxShadow: theme === 'dark' ? '0 4px 12px rgba(0,0,0,0.5)' : '0 4px 12px rgba(0,0,0,0.1)',
-              minWidth: '200px'
-            }}
-          />
+          {viewMode === 'chart' ? (
+            <>
+              <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }} />
+              
+              {/* Custom HTML Tooltip */}
+              <div 
+                ref={tooltipRef}
+                style={{
+                  position: 'absolute', display: 'none', padding: '12px',
+                  backgroundColor: 'var(--panel-bg)', border: '1px solid var(--panel-border)',
+                  borderRadius: '6px', color: 'var(--text-primary)', zIndex: 100, pointerEvents: 'none',
+                  boxShadow: theme === 'dark' ? '0 4px 12px rgba(0,0,0,0.5)' : '0 4px 12px rgba(0,0,0,0.1)',
+                  minWidth: '200px'
+                }}
+              />
+            </>
+          ) : (
+            <div className="table-container" style={{ height: '100%', overflowY: 'auto', border: '1px solid var(--panel-border)', borderRadius: '8px' }}>
+              <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--panel-bg)' }}>
+                  <tr>
+                    <th style={{ textAlign: 'left', padding: '12px' }}>Date</th>
+                    {Array.from(new Map(schemes.map(s => [String(s.schemeCode), s])).values()).map((scheme, idx) => (
+                      <th key={scheme.schemeCode} style={{ padding: '12px', color: COLORS[idx % COLORS.length] }}>
+                        {scheme.schemeName}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.keys(mergedDataMap).sort().reverse().map(time => {
+                    const point = mergedDataMap[time];
+                    const uniqueSchemes = Array.from(new Map(schemes.map(s => [String(s.schemeCode), s])).values());
+                    
+                    // Only show rows where at least one scheme has data
+                    if (!uniqueSchemes.some(s => point[String(s.schemeCode)] !== undefined)) return null;
+
+                    return (
+                      <tr key={time} style={{ borderBottom: '1px solid var(--panel-border)' }}>
+                        <td style={{ padding: '12px', whiteSpace: 'nowrap', fontWeight: 500 }}>{point.originalDate}</td>
+                        {uniqueSchemes.map(scheme => {
+                          const code = String(scheme.schemeCode);
+                          const val = point[code];
+                          const rawVal = point[`${code}_raw`] || val;
+                          const displayVal = isIndexed ? (val !== undefined ? val.toFixed(2) : '-') : (val !== undefined ? rawVal.toFixed(4) : '-');
+                          return (
+                            <td key={code} style={{ padding: '12px', textAlign: 'center' }}>
+                              {displayVal}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Average 1-Year Rolling Returns Table */}
-      {rollingStats.length > 0 && (
+      {/* Trailing Returns Table */}
+      {trailingStats.length > 0 && (
         <div className="table-container" style={{ marginTop: 'var(--spacing-xl)' }}>
           <div style={{ padding: '16px', borderBottom: '1px solid var(--panel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 500 }}>Average 1-Year Rolling Returns</h3>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Calculated from daily step intervals</span>
+            <h3 style={{ fontSize: '1rem', fontWeight: 500 }}>Trailing Returns</h3>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Point-to-point performance</span>
           </div>
           <table className="data-table">
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>Fund Name</th>
-                <th>1Y Avg Return</th>
-                <th>3Y Avg Return</th>
-                <th>5Y Avg Return</th>
+                {['1M', '3M', '6M', '1Y', '3Y', '5Y', '10Y'].map(period => (
+                  <th key={period}>{period}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {rollingStats.map(({ scheme, stats }, idx) => (
+              {trailingStats.map(({ scheme, stats }, idx) => (
                 <tr key={scheme.schemeCode}>
                   <td className="scheme-name" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: COLORS[idx % COLORS.length] }} />
                     {scheme.schemeName}
                   </td>
-                  {stats ? (
-                    stats.map(stat => (
-                      <td key={stat.label} style={{ color: stat.isPositive ? 'var(--success)' : 'var(--danger)', fontWeight: 500 }}>
-                        {stat.value !== 'N/A' ? `${stat.value}%` : '-'}
+                  {['1M', '3M', '6M', '1Y', '3Y', '5Y', '10Y'].map(periodLabel => {
+                    const stat = stats ? stats.find(s => s.label === periodLabel) : null;
+                    if (!stat || stat.value === 'N/A') return <td key={periodLabel} style={{ color: 'var(--text-secondary)' }}>-</td>;
+                    return (
+                      <td key={periodLabel} style={{ color: stat.isPositive ? 'var(--success)' : 'var(--danger)', fontWeight: 500 }}>
+                        {stat.value}%
                       </td>
-                    ))
-                  ) : (
-                    <td colSpan={3} style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>Data not available</td>
-                  )}
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>

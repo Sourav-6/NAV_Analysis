@@ -18,15 +18,16 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import https from 'https';
 import http from 'http';
+import Database from 'better-sqlite3';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(PROJECT_ROOT, 'data');
-const NAV_DIR = path.join(DATA_DIR, 'nav');
-const METADATA_FILE = path.join(DATA_DIR, 'metadata.json');
-const SCHEMES_FILE = path.join(DATA_DIR, 'schemes.json');
+const DB_PATH = path.join(DATA_DIR, 'database.sqlite');
 const PROGRESS_FILE = path.join(DATA_DIR, '.progress.json');
+
+let db;
 
 const AMFI_BASE_URL = 'https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx';
 const DELAY_BETWEEN_REQUESTS_MS = 2500; // Be respectful to AMFI servers
@@ -37,7 +38,28 @@ const YEARS_TO_FETCH = 15;
 
 function ensureDirs() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(NAV_DIR)) fs.mkdirSync(NAV_DIR, { recursive: true });
+  if (!db) {
+    db = new Database(DB_PATH);
+    db.pragma('journal_mode = WAL');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS schemes (
+        schemeCode INTEGER PRIMARY KEY,
+        schemeName TEXT NOT NULL,
+        isin TEXT,
+        schemeCategory TEXT
+      );
+      CREATE TABLE IF NOT EXISTS nav_history (
+        schemeCode INTEGER,
+        date TEXT NOT NULL,
+        nav REAL NOT NULL,
+        PRIMARY KEY (schemeCode, date)
+      ) WITHOUT ROWID;
+      CREATE TABLE IF NOT EXISTS metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
+    `);
+  }
 }
 
 function formatDateForAMFI(date) {
@@ -168,6 +190,11 @@ function parseAMFIData(rawText) {
     const nav = parseFloat(navStr);
     if (isNaN(nav)) { skippedCount++; continue; }
 
+    const nameLower = schemeName.toLowerCase();
+    const isGrowth = nameLower.includes('growth');
+    const isIDCW = nameLower.includes('idcw') || nameLower.includes('dividend');
+    if (!isGrowth || isIDCW) { skippedCount++; continue; }
+
     if (!schemeMap.has(schemeCode)) {
       schemeMap.set(schemeCode, {
         schemeCode,
@@ -236,68 +263,32 @@ function clearProgress() {
 function mergeAndSaveSchemeData(schemeMap) {
   let newSchemes = 0;
   let updatedSchemes = 0;
-  const allSchemes = [];
-
-  for (const [schemeCode, data] of schemeMap) {
-    const filePath = path.join(NAV_DIR, `${schemeCode}.json`);
-    let existing = null;
-
-    if (fs.existsSync(filePath)) {
-      try {
-        existing = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      } catch {
-        existing = null;
-      }
-    }
-
-    if (existing) {
-      // Merge: add new dates that don't exist yet
-      const existingDates = new Set(existing.navData.map(e => e.date));
-      const newEntries = data.navEntries.filter(e => !existingDates.has(e.date));
+  
+  const insertScheme = db.prepare('INSERT OR IGNORE INTO schemes (schemeCode, schemeName, isin, schemeCategory) VALUES (?, ?, ?, ?)');
+  const insertNav = db.prepare('INSERT OR IGNORE INTO nav_history (schemeCode, date, nav) VALUES (?, ?, ?)');
+  const checkSchemeExists = db.prepare('SELECT 1 FROM schemes WHERE schemeCode = ?');
+  
+  const insertMany = db.transaction((schemesData) => {
+    for (const [schemeCode, data] of schemesData) {
+      const parsedCode = parseInt(schemeCode);
       
-      if (newEntries.length > 0) {
-        existing.navData = [...existing.navData, ...newEntries];
-        // Sort by date descending (newest first) — parse DD-Mon-YYYY
-        existing.navData.sort((a, b) => {
-          return parseDateString(b.date) - parseDateString(a.date);
-        });
-        fs.writeFileSync(filePath, JSON.stringify(existing));
+      const exists = checkSchemeExists.get(parsedCode);
+      if (!exists) {
+        insertScheme.run(parsedCode, data.schemeName, data.isin || '', data.schemeCategory || '');
+        newSchemes++;
+      } else {
         updatedSchemes++;
       }
-
-      allSchemes.push({
-        schemeCode: existing.schemeCode,
-        schemeName: existing.schemeName,
-        isin: existing.isin,
-        schemeCategory: existing.schemeCategory || 'Unknown'
-      });
-    } else {
-      // Sort nav entries by date descending (newest first)
-      data.navEntries.sort((a, b) => {
-        return parseDateString(b.date) - parseDateString(a.date);
-      });
-
-      const schemeData = {
-        schemeCode: data.schemeCode,
-        schemeName: data.schemeName,
-        isin: data.isin,
-        schemeCategory: data.schemeCategory,
-        navData: data.navEntries
-      };
-
-      fs.writeFileSync(filePath, JSON.stringify(schemeData));
-      newSchemes++;
-
-      allSchemes.push({
-        schemeCode: data.schemeCode,
-        schemeName: data.schemeName,
-        isin: data.isin,
-        schemeCategory: data.schemeCategory || 'Unknown'
-      });
+      
+      for (const entry of data.navEntries) {
+        insertNav.run(parsedCode, entry.date, parseFloat(entry.nav));
+      }
     }
-  }
+  });
 
-  return { newSchemes, updatedSchemes, allSchemes };
+  insertMany(schemeMap);
+
+  return { newSchemes, updatedSchemes };
 }
 
 /**
@@ -319,26 +310,9 @@ function parseDateString(dateStr) {
 
 // ── Update Master Schemes List ───────────────────────────────────────────────
 
-function updateMasterSchemeList(allSchemes) {
-  let existingSchemes = [];
-  if (fs.existsSync(SCHEMES_FILE)) {
-    try {
-      existingSchemes = JSON.parse(fs.readFileSync(SCHEMES_FILE, 'utf-8'));
-    } catch {
-      existingSchemes = [];
-    }
-  }
-
-  // Merge by schemeCode
-  const schemeMap = new Map();
-  for (const s of existingSchemes) schemeMap.set(s.schemeCode, s);
-  for (const s of allSchemes) schemeMap.set(s.schemeCode, s);
-
-  const merged = Array.from(schemeMap.values());
-  merged.sort((a, b) => a.schemeName.localeCompare(b.schemeName));
-  
-  fs.writeFileSync(SCHEMES_FILE, JSON.stringify(merged));
-  return merged.length;
+function updateMasterSchemeList() {
+  // Master list is updated dynamically through the DB during mergeAndSaveSchemeData
+  return db.prepare('SELECT COUNT(*) as c FROM schemes').get().c;
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -363,12 +337,14 @@ async function main() {
 
   if (isUpdate) {
     // Read last update timestamp
-    if (!fs.existsSync(METADATA_FILE)) {
+    const metaRecord = db ? db.prepare("SELECT value FROM metadata WHERE key = 'global_metadata'").get() : null;
+    
+    if (!metaRecord) {
       console.log('⚠ No existing data found. Running full download instead.');
       startDate = new Date();
       startDate.setFullYear(startDate.getFullYear() - YEARS_TO_FETCH);
     } else {
-      const metadata = JSON.parse(fs.readFileSync(METADATA_FILE, 'utf-8'));
+      const metadata = JSON.parse(metaRecord.value);
       startDate = new Date(metadata.lastNavDate);
       startDate.setDate(startDate.getDate() + 1); // Day after last stored date
       
@@ -448,9 +424,8 @@ async function main() {
 
       // Save to disk every 6 chunks to avoid losing too much data on crash
       if ((i + 1) % 6 === 0 || i === chunks.length - 1) {
-        process.stdout.write(`  💾 Saving to disk...`);
-        const { newSchemes, updatedSchemes, allSchemes } = mergeAndSaveSchemeData(globalSchemeMap);
-        updateMasterSchemeList(allSchemes);
+        process.stdout.write(`  💾 Saving to database...`);
+        const { newSchemes, updatedSchemes } = mergeAndSaveSchemeData(globalSchemeMap);
         console.log(` Done (${newSchemes} new, ${updatedSchemes} updated schemes)`);
         globalSchemeMap.clear(); // Free memory after saving
       }
@@ -475,17 +450,20 @@ async function main() {
   }
 
   // Update metadata
-  const navFiles = fs.readdirSync(NAV_DIR).filter(f => f.endsWith('.json'));
-  
+  // Update metadata
+  // Count final schemes in DB
+  const navFilesLength = db.prepare('SELECT COUNT(*) as c FROM schemes').get().c;
+
   let existingMetadata = {
     totalDataPoints: 0,
     dataRangeStart: formatDateForDisplay(startDate),
     dataRangeEnd: formatDateForDisplay(endDate)
   };
   
-  if (fs.existsSync(METADATA_FILE)) {
+  const metaRecord = db.prepare("SELECT value FROM metadata WHERE key = 'global_metadata'").get();
+  if (metaRecord) {
     try {
-      existingMetadata = JSON.parse(fs.readFileSync(METADATA_FILE, 'utf-8'));
+      existingMetadata = JSON.parse(metaRecord.value);
     } catch (e) {
       // ignore
     }
@@ -499,8 +477,6 @@ async function main() {
     ? existingMetadata.dataRangeStart
     : formatDateForDisplay(startDate);
 
-  // Only push dataRangeEnd forward if we successfully parsed new data points.
-  // Otherwise, keep the old dataRangeEnd to avoid claiming we have data we don't.
   const newEndDate = isUpdate
     ? (totalDataPoints > 0 ? formatDateForDisplay(endDate) : (existingMetadata.dataRangeEnd || formatDateForDisplay(endDate)))
     : formatDateForDisplay(endDate);
@@ -508,13 +484,14 @@ async function main() {
   const metadata = {
     lastUpdated: new Date().toISOString(),
     lastNavDate: newEndDate,
-    totalSchemes: navFiles.length,
+    totalSchemes: navFilesLength,
     totalDataPoints: newTotalDataPoints,
     dataRangeStart: newStartDate,
     dataRangeEnd: newEndDate,
     yearsOfData: YEARS_TO_FETCH
   };
-  fs.writeFileSync(METADATA_FILE, JSON.stringify(metadata, null, 2));
+  
+  db.prepare('INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)').run('global_metadata', JSON.stringify(metadata));
 
   // Clean up progress file
   clearProgress();

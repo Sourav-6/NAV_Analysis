@@ -1,24 +1,21 @@
 /**
  * API Utility Layer
  * 
- * Connects to the local NAV data server (localhost:3001) for fast, cached data.
- * Falls back to the live mfapi.in API if the local server is unavailable.
+ * Connects strictly to the local NAV data server (localhost:3001) for fast, cached data.
+ * All data is officially sourced from AMFI.
  */
 
 const LOCAL_API = 'http://localhost:3001/api';
-const LIVE_API = 'https://api.mfapi.in';
 
-let _useLocal = null; // null = not checked yet, true/false = cached result
 let _dataStatus = null;
 
 /**
  * Check if local data server is available and cache the result.
- * Re-checks every 30 seconds in case the server starts/stops.
  */
 let _lastCheck = 0;
-async function isLocalAvailable() {
+async function fetchLocalStatus() {
   const now = Date.now();
-  if (_useLocal !== null && now - _lastCheck < 30000) return _useLocal;
+  if (_dataStatus !== null && now - _lastCheck < 30000) return true;
 
   try {
     const controller = new AbortController();
@@ -28,31 +25,29 @@ async function isLocalAvailable() {
     
     if (res.ok) {
       _dataStatus = await res.json();
-      _useLocal = true;
-    } else {
-      _useLocal = false;
+      _lastCheck = now;
+      return true;
     }
   } catch {
-    _useLocal = false;
+    // Server is down
   }
-  _lastCheck = now;
-  return _useLocal;
+  return false;
 }
 
 /**
  * Returns data source status info.
- * { source: 'local' | 'live', metadata: {...} | null }
+ * { source: 'local', metadata: {...} | null }
  */
 export const getDataStatus = async () => {
-  const local = await isLocalAvailable();
-  if (local && _dataStatus) {
+  const isUp = await fetchLocalStatus();
+  if (isUp && _dataStatus) {
     return {
       source: 'local',
       metadata: _dataStatus.metadata,
       isUpdating: _dataStatus.isUpdating
     };
   }
-  return { source: 'live', metadata: null, isUpdating: false };
+  return { source: 'offline', metadata: null, isUpdating: false };
 };
 
 // ── Scheme List ──────────────────────────────────────────────────────────────
@@ -64,8 +59,8 @@ export const fetchAllSchemes = async () => {
   if (masterSchemeList) return masterSchemeList;
   
   try {
-    const local = await isLocalAvailable();
-    const url = local ? `${LOCAL_API}/schemes` : `${LIVE_API}/mf`;
+    const isUp = await fetchLocalStatus();
+    const url = `${LOCAL_API}/schemes`;
     
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch master scheme list');
@@ -84,9 +79,9 @@ export const fetchAllSchemes = async () => {
  */
 export const getSchemesByCategory = async (category, plan = 'direct') => { // 'Large Cap', 'Mid Cap', 'Small Cap'
   try {
-    const local = await isLocalAvailable();
+    const isUp = await fetchLocalStatus();
     
-    if (local) {
+    if (isUp) {
       // Use the server's category endpoint (already filters Direct Growth)
       const response = await fetch(`${LOCAL_API}/schemes/category/${encodeURIComponent(category)}?plan=${encodeURIComponent(plan)}`);
       if (response.ok) return await response.json();
@@ -134,9 +129,8 @@ export const getSchemesByCategory = async (category, plan = 'direct') => { // 'L
  */
 export const searchSchemes = async (query) => {
   try {
-    const local = await isLocalAvailable();
-    
-    if (local) {
+    const isUp = await fetchLocalStatus();
+    if (isUp) {
       const response = await fetch(`${LOCAL_API}/schemes/search?q=${encodeURIComponent(query)}`);
       if (response.ok) return await response.json();
     }
@@ -160,20 +154,68 @@ export const searchSchemes = async (query) => {
 
 /**
  * Fetches NAV data for a specific scheme code.
- * Uses local server if available, falls back to mfapi.in.
+ * Uses local AMFI server strictly.
  */
 export const getSchemeNavData = async (schemeCode) => {
   try {
-    const local = await isLocalAvailable();
-    const url = local 
-      ? `${LOCAL_API}/nav/${schemeCode}` 
-      : `${LIVE_API}/mf/${schemeCode}`;
-    
+    const url = `${LOCAL_API}/nav/${schemeCode}`;
     const response = await fetch(url);
     if (!response.ok) return null;
     const data = await response.json();
     return data;
   } catch (error) {
     return null;
+  }
+};
+
+// ── Fund Ranking Engine ──────────────────────────────────────────────────────
+
+/**
+ * Fetches the current algorithm weights and risk-free rate
+ */
+export const getRankingConfig = async () => {
+  try {
+    const response = await fetch(`${LOCAL_API}/ranking/config`);
+    if (!response.ok) throw new Error('Failed to fetch config');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching ranking config:', error);
+    return null;
+  }
+};
+
+/**
+ * Updates the algorithm weights and risk-free rate
+ */
+export const updateRankingConfig = async (config) => {
+  try {
+    const response = await fetch(`${LOCAL_API}/ranking/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config)
+    });
+    if (!response.ok) throw new Error('Failed to update config');
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating ranking config:', error);
+    return null;
+  }
+};
+
+/**
+ * Calculates rankings based on selected parameters
+ */
+export const calculateRankings = async (params) => {
+  try {
+    const response = await fetch(`${LOCAL_API}/ranking/calculate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+    if (!response.ok) throw new Error('Failed to calculate rankings');
+    return await response.json();
+  } catch (error) {
+    console.error('Error calculating rankings:', error);
+    return [];
   }
 };

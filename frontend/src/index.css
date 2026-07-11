@@ -364,3 +364,34 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--accent-primary);
   opacity: 1;
 }
+
+/* Quartile Heatmap Badges */
+.quartile-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 4px;
+  min-width: 50px;
+  text-align: center;
+}
+
+.quartile-badge.q1 {
+  background-color: var(--q1-bg);
+  color: var(--q1-text);
+}
+
+.quartile-badge.q2 {
+  background-color: var(--q2-bg);
+  color: var(--q2-text);
+}
+
+.quartile-badge.q3 {
+  background-color: var(--q3-bg);
+  color: var(--q3-text);
+}
+
+.quartile-badge.q4 {
+  background-color: var(--q4-bg);
+  color: var(--q4-text);
+}

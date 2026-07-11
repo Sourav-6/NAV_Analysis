@@ -202,7 +202,7 @@ function App() {
             onClick={() => setActiveView('ranking')}
           >
             <Award size={16} />
-            Fund Selection Algorithm
+            SRP Ranking
           </button>
         </div>
       </header>

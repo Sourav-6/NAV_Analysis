@@ -1,12 +1,233 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createChart, CrosshairMode, LineSeries } from 'lightweight-charts';
-import { Loader2 } from 'lucide-react';
-import { getSchemeNavData } from '../utils/api';
+import { Loader2, Award, ChevronDown, ChevronUp } from 'lucide-react';
+import { getSchemeNavData, calculateSelectedRankings, getRankingConfig } from '../utils/api';
 import { calculateCalendarReturns, calculateTrailingReturns } from '../utils/returns';
 
 const COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4',
 ];
+
+const RANK_PERIOD_OPTIONS = [
+  { value: '1Y', label: '1 Year' },
+  { value: '3Y', label: '3 Years' },
+  { value: '5Y', label: '5 Years' },
+  { value: '10Y', label: '10 Years' }
+];
+
+const RANK_WINDOW_OPTIONS = [
+  { value: '1M', label: '1 Month', years: 1/12 },
+  { value: '3M', label: '3 Months', years: 3/12 },
+  { value: '1Y', label: '1 Year', years: 1 },
+  { value: '3Y', label: '3 Years', years: 3 },
+  { value: '5Y', label: '5 Years', years: 5 }
+];
+
+/**
+ * Sub-component for SRP Ranking analysis within the comparison view.
+ * Ranks only the user-selected schemes against each other.
+ */
+const RankingAnalysis = ({
+  schemes, analysisPeriod, setAnalysisPeriod,
+  rollingWindow, setRollingWindow,
+  rankedFunds, setRankedFunds,
+  isLoading, setIsLoading,
+  error, setError,
+  config, setConfig
+}) => {
+  // Load config on mount
+  useEffect(() => {
+    getRankingConfig().then(cfg => {
+      if (cfg) setConfig(cfg);
+    });
+  }, []);
+
+  // Valid window options based on analysis period
+  const validWindowOptions = useMemo(() => {
+    const apYears = parseInt(analysisPeriod);
+    return RANK_WINDOW_OPTIONS.filter(opt => opt.years <= apYears);
+  }, [analysisPeriod]);
+
+  // Auto-adjust rolling window if it exceeds the analysis period
+  useEffect(() => {
+    const apYears = parseInt(analysisPeriod);
+    const selectedOpt = RANK_WINDOW_OPTIONS.find(opt => opt.value === rollingWindow);
+    if (selectedOpt && selectedOpt.years > apYears) {
+      const validOpts = RANK_WINDOW_OPTIONS.filter(opt => opt.years <= apYears);
+      if (validOpts.length > 0) {
+        setRollingWindow(validOpts[validOpts.length - 1].value);
+      }
+    }
+  }, [analysisPeriod, rollingWindow]);
+
+  // Calculate rankings when schemes or parameters change
+  useEffect(() => {
+    if (schemes.length < 2) return;
+
+    const fetchRankings = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const schemeCodes = schemes.map(s => s.schemeCode);
+        const data = await calculateSelectedRankings({
+          schemeCodes,
+          analysisPeriod,
+          rollingWindow,
+          config: config || undefined
+        });
+        setRankedFunds(data);
+      } catch (err) {
+        console.error(err);
+        setError('Failed to compute rankings for selected schemes.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchRankings();
+  }, [schemes.length, analysisPeriod, rollingWindow, config]);
+
+  const getPercentileClass = (score) => {
+    if (score >= 75) return 'q1';
+    if (score >= 50) return 'q2';
+    if (score >= 25) return 'q3';
+    return 'q4';
+  };
+
+  return (
+    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Controls Row */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <span style={{ fontSize: '0.7rem', fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Analysis Period</span>
+          <select
+            value={analysisPeriod}
+            onChange={(e) => setAnalysisPeriod(e.target.value)}
+            style={{
+              background: 'var(--bg-color)',
+              border: '1px solid var(--panel-border)',
+              color: 'var(--text-primary)',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              outline: 'none'
+            }}
+          >
+            {RANK_PERIOD_OPTIONS.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <span style={{ fontSize: '0.7rem', fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Rolling Window</span>
+          <select
+            value={rollingWindow}
+            onChange={(e) => setRollingWindow(e.target.value)}
+            style={{
+              background: 'var(--bg-color)',
+              border: '1px solid var(--panel-border)',
+              color: 'var(--text-primary)',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              outline: 'none'
+            }}
+          >
+            {validWindowOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', paddingBottom: '8px' }}>
+          Ranking {schemes.length} funds against each other
+        </span>
+      </div>
+
+      {/* Results */}
+      {isLoading ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '40px 0' }}>
+          <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent-primary)' }} />
+          <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Computing rolling window rankings...</span>
+        </div>
+      ) : error ? (
+        <div style={{ padding: '16px', color: 'var(--danger)', fontSize: '0.9rem' }}>
+          {error}
+        </div>
+      ) : rankedFunds.length === 0 ? (
+        <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          No ranking data available. The selected funds may not have enough historical data for the chosen {analysisPeriod} analysis period.
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th style={{ width: '50px', textAlign: 'center' }}>Rank</th>
+                <th style={{ textAlign: 'left', minWidth: '200px' }}>Fund Name</th>
+                <th style={{ textAlign: 'center' }}>Overall</th>
+                <th style={{ textAlign: 'center' }}>Daily Lead.</th>
+                <th style={{ textAlign: 'center' }}>Recent Lead.</th>
+                <th style={{ textAlign: 'center' }}>Sortino</th>
+                <th style={{ textAlign: 'center' }}>Max DD</th>
+                <th style={{ textAlign: 'center' }}>Ulcer</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rankedFunds.map((fund, idx) => {
+                const schemeIdx = schemes.findIndex(s => String(s.schemeCode) === String(fund.schemeCode));
+                const color = schemeIdx >= 0 ? COLORS[schemeIdx % COLORS.length] : 'var(--text-primary)';
+                const isTopRanked = idx < 3;
+
+                return (
+                  <tr key={fund.schemeCode}>
+                    <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                      {isTopRanked ? (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: idx === 0 ? '#d4af37' : idx === 1 ? '#c0c0c0' : '#cd7f32' }}>
+                          <Award size={14} />
+                          {idx + 1}
+                        </div>
+                      ) : (
+                        idx + 1
+                      )}
+                    </td>
+                    <td className="scheme-name" style={{ textAlign: 'left', fontWeight: 500 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: color, flexShrink: 0 }} />
+                        {fund.schemeName}
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--brand-blue, var(--accent-primary))' }}>
+                      {fund.overallScore.toFixed(1)}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className={`quartile-badge ${getPercentileClass(fund.dailyLeadership)}`}>{fund.dailyLeadership.toFixed(1)}</span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className={`quartile-badge ${getPercentileClass(fund.recentLeadership)}`}>{fund.recentLeadership.toFixed(1)}</span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className={`quartile-badge ${getPercentileClass(fund.sortinoScore)}`}>{fund.sortinoScore.toFixed(1)}</span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className={`quartile-badge ${getPercentileClass(fund.mddScore)}`}>{fund.mddScore.toFixed(1)}</span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className={`quartile-badge ${getPercentileClass(fund.ulcerScore)}`}>{fund.ulcerScore.toFixed(1)}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
   const [navDataMap, setNavDataMap] = useState({});
@@ -14,6 +235,15 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
   const [timeframe, setTimeframe] = useState('ALL'); 
   const [isIndexed, setIsIndexed] = useState(true);
   const [viewMode, setViewMode] = useState('chart'); // 'chart' or 'table'
+
+  // SRP Ranking state
+  const [showRanking, setShowRanking] = useState(false);
+  const [rankAnalysisPeriod, setRankAnalysisPeriod] = useState('3Y');
+  const [rankRollingWindow, setRankRollingWindow] = useState('1Y');
+  const [rankedFunds, setRankedFunds] = useState([]);
+  const [isRankingLoading, setIsRankingLoading] = useState(false);
+  const [rankingError, setRankingError] = useState(null);
+  const [rankingConfig, setRankingConfig] = useState(null);
 
   const chartContainerRef = useRef(null);
   const tooltipRef = useRef(null);
@@ -577,6 +807,63 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
           </table>
         </div>
       )}
+
+      {/* SRP Ranking Section */}
+      <div className="table-container" style={{ marginTop: 'var(--spacing-xl)' }}>
+        <button
+          onClick={() => {
+            if (!showRanking && schemes.length >= 2) {
+              setShowRanking(true);
+            } else {
+              setShowRanking(!showRanking);
+            }
+          }}
+          disabled={schemes.length < 2}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: showRanking ? '1px solid var(--panel-border)' : 'none',
+            color: schemes.length < 2 ? 'var(--text-secondary)' : 'var(--text-primary)',
+            cursor: schemes.length < 2 ? 'not-allowed' : 'pointer',
+            fontSize: '1rem',
+            fontWeight: 500,
+            transition: 'all 0.15s ease'
+          }}
+          title={schemes.length < 2 ? 'Select at least 2 schemes to rank' : 'SRP Ranking — rank these funds against each other'}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Award size={18} style={{ color: showRanking ? 'var(--accent-primary)' : 'currentColor' }} />
+            <span>SRP Ranking</span>
+            {schemes.length < 2 && (
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 400 }}>(Select ≥ 2 schemes)</span>
+            )}
+          </div>
+          {showRanking ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        </button>
+
+        {showRanking && schemes.length >= 2 && (
+          <RankingAnalysis
+            schemes={schemes}
+            analysisPeriod={rankAnalysisPeriod}
+            setAnalysisPeriod={setRankAnalysisPeriod}
+            rollingWindow={rankRollingWindow}
+            setRollingWindow={setRankRollingWindow}
+            rankedFunds={rankedFunds}
+            setRankedFunds={setRankedFunds}
+            isLoading={isRankingLoading}
+            setIsLoading={setIsRankingLoading}
+            error={rankingError}
+            setError={setRankingError}
+            config={rankingConfig}
+            setConfig={setRankingConfig}
+          />
+        )}
+      </div>
       
       <style>{`
         @keyframes spin { 100% { transform: rotate(360deg); } }

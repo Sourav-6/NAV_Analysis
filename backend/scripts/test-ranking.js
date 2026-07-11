@@ -19,7 +19,7 @@ function parseDateString(dateStr) {
 }
 
 function test() {
-  console.log('🧪 Testing Ranking Selection Algorithm mathematical formulas...');
+  console.log('🧪 Testing SRP Ranking mathematical formulas...');
   
   const db = new Database(DB_PATH);
   

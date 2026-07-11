@@ -168,7 +168,7 @@ export const getSchemeNavData = async (schemeCode) => {
   }
 };
 
-// ── Fund Ranking Engine ──────────────────────────────────────────────────────
+// ── SRP Ranking Engine ───────────────────────────────────────────────────────
 
 /**
  * Fetches the current algorithm weights and risk-free rate
@@ -216,6 +216,25 @@ export const calculateRankings = async (params) => {
     return await response.json();
   } catch (error) {
     console.error('Error calculating rankings:', error);
+    return [];
+  }
+};
+
+/**
+ * Calculates rankings for a specific set of user-selected scheme codes
+ * @param {Object} params - { schemeCodes: number[], analysisPeriod: string, rollingWindow: string, config?: object }
+ */
+export const calculateSelectedRankings = async (params) => {
+  try {
+    const response = await fetch(`${LOCAL_API}/ranking/calculate-selected`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+    if (!response.ok) throw new Error('Failed to calculate selected rankings');
+    return await response.json();
+  } catch (error) {
+    console.error('Error calculating selected rankings:', error);
     return [];
   }
 };

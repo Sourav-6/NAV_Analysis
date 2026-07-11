@@ -364,7 +364,7 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan }) => {
         <div className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--panel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Algorithm Output Rankings ({rankedFunds.length} Funds)</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>SRP Ranking ({rankedFunds.length} Funds)</h3>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
                 Sorted by Overall Score descending based on weights (RRLS Avg: {Math.round(config.weight_rrls_avg_return*100)}% | RRLS Recent: {Math.round(config.weight_rrls_recent_return*100)}% | Sortino: {Math.round(config.weight_sortino*100)}% | MDD: {Math.round(config.weight_mdd*100)}% | Ulcer: {Math.round(config.weight_ulcer*100)}%)
               </p>

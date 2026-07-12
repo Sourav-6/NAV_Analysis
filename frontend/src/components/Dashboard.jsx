@@ -6,7 +6,7 @@ import { TrendingUp, TrendingDown, Calendar } from 'lucide-react';
 import { calculateTrailingReturns } from '../utils/returns';
 
 const Dashboard = ({ scheme, navData }) => {
-  const [timeframe, setTimeframe] = useState('1Y'); // 1M, 3M, 6M, 1Y, 3Y, 5Y, 10Y, ALL
+  const [timeframe, setTimeframe] = useState('1Y'); // 1M, 3M, 6M, 1Y, 3Y, 5Y, 10Y, 15Y, ALL
   
   const returns = useMemo(() => {
     return calculateTrailingReturns(navData);
@@ -32,6 +32,7 @@ const Dashboard = ({ scheme, navData }) => {
       if (timeframe === '3Y') cutoffDate.setFullYear(cutoffDate.getFullYear() - 3);
       if (timeframe === '5Y') cutoffDate.setFullYear(cutoffDate.getFullYear() - 5);
       if (timeframe === '10Y') cutoffDate.setFullYear(cutoffDate.getFullYear() - 10);
+      if (timeframe === '15Y') cutoffDate.setFullYear(cutoffDate.getFullYear() - 15);
       
       data = data.filter(item => {
         const [id, im, iy] = item.date.split('-');
@@ -108,7 +109,7 @@ const Dashboard = ({ scheme, navData }) => {
         <div className="flex justify-between items-center" style={{ flexWrap: 'wrap', gap: '10px' }}>
           <h3>NAV History</h3>
           <div className="flex gap-sm" style={{ flexWrap: 'wrap' }}>
-            {['1M', '3M', '6M', '1Y', '3Y', '5Y', '10Y', 'ALL'].map(tf => (
+            {['1M', '3M', '6M', '1Y', '3Y', '5Y', '10Y', '15Y', 'ALL'].map(tf => (
               <button 
                 key={tf}
                 className="btn"

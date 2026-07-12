@@ -14,7 +14,8 @@ const PERIOD_OPTIONS = [
   { value: '1Y', label: '1 Year' },
   { value: '3Y', label: '3 Years' },
   { value: '5Y', label: '5 Years' },
-  { value: '10Y', label: '10 Years' }
+  { value: '10Y', label: '10 Years' },
+  { value: '15Y', label: '15 Years' }
 ];
 
 const WINDOW_OPTIONS = [

@@ -46,6 +46,7 @@ export const calculateAllReturns = (navData) => {
     { key: '3Y', targetDate: subYears(latestDate, 3), years: 3 },
     { key: '5Y', targetDate: subYears(latestDate, 5), years: 5 },
     { key: '10Y', targetDate: subYears(latestDate, 10), years: 10 },
+    { key: '15Y', targetDate: subYears(latestDate, 15), years: 15 },
   ];
 
   const results = {};
@@ -97,6 +98,7 @@ export const calculateTrailingReturns = (navData) => {
     { label: '3Y', targetDate: subYears(latestDate, 3), years: 3 },
     { label: '5Y', targetDate: subYears(latestDate, 5), years: 5 },
     { label: '10Y', targetDate: subYears(latestDate, 10), years: 10 },
+    { label: '15Y', targetDate: subYears(latestDate, 15), years: 15 },
   ];
 
   return periods.map(period => {
@@ -210,8 +212,8 @@ export const calculateCalendarReturns = (navData) => {
   
   const currentYear = latestDate.getFullYear();
   const yearsToCalculate = [];
-  // Calculate exactly down to 2013
-  for (let y = currentYear; y >= 2013; y--) {
+  // Calculate down to 2011 (15 years from 2026) to support the full historical data
+  for (let y = currentYear; y >= 2011; y--) {
     yearsToCalculate.push(y);
   }
 

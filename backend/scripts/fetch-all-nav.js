@@ -345,8 +345,16 @@ async function main() {
       startDate.setFullYear(startDate.getFullYear() - YEARS_TO_FETCH);
     } else {
       const metadata = JSON.parse(metaRecord.value);
-      startDate = new Date(metadata.lastNavDate);
-      startDate.setDate(startDate.getDate() + 1); // Day after last stored date
+      // Use actual latest NAV date from DB, not the stored metadata (which may be the request date)
+      const actualLatest = db.prepare("SELECT MAX(date) as maxDate FROM nav_history").get();
+      if (actualLatest && actualLatest.maxDate) {
+        const latestTs = parseDateString(actualLatest.maxDate);
+        startDate = new Date(latestTs);
+      } else {
+        startDate = new Date(metadata.lastNavDate);
+      }
+      // Go back 3 days to fill any gaps from late-published NAVs
+      startDate.setDate(startDate.getDate() - 3);
       
       if (startDate >= endDate) {
         console.log('✅ Data is already up to date!');
@@ -477,13 +485,21 @@ async function main() {
     ? existingMetadata.dataRangeStart
     : formatDateForDisplay(startDate);
 
-  const newEndDate = isUpdate
-    ? (totalDataPoints > 0 ? formatDateForDisplay(endDate) : (existingMetadata.dataRangeEnd || formatDateForDisplay(endDate)))
-    : formatDateForDisplay(endDate);
+  // Determine the actual latest NAV date from the database, not the request date
+  let actualLastNavDate;
+  const latestRow = db.prepare("SELECT MAX(date) as maxDate FROM nav_history").get();
+  if (latestRow && latestRow.maxDate) {
+    const ts = parseDateString(latestRow.maxDate);
+    actualLastNavDate = formatDateForDisplay(new Date(ts));
+  } else {
+    actualLastNavDate = formatDateForDisplay(endDate);
+  }
+
+  const newEndDate = actualLastNavDate;
 
   const metadata = {
     lastUpdated: new Date().toISOString(),
-    lastNavDate: newEndDate,
+    lastNavDate: actualLastNavDate,
     totalSchemes: navFilesLength,
     totalDataPoints: newTotalDataPoints,
     dataRangeStart: newStartDate,

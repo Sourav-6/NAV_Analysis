@@ -741,7 +741,7 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>Fund Name</th>
-                {['1M', '3M', '6M', '1Y', '3Y', '5Y', '10Y'].map(period => (
+                {['1M', '3M', '6M', '1Y', '3Y', '5Y', '10Y', '15Y'].map(period => (
                   <th key={period}>{period}</th>
                 ))}
               </tr>
@@ -753,7 +753,7 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: COLORS[idx % COLORS.length] }} />
                     {scheme.schemeName}
                   </td>
-                  {['1M', '3M', '6M', '1Y', '3Y', '5Y', '10Y'].map(periodLabel => {
+                  {['1M', '3M', '6M', '1Y', '3Y', '5Y', '10Y', '15Y'].map(periodLabel => {
                     const stat = stats ? stats.find(s => s.label === periodLabel) : null;
                     if (!stat || stat.value === 'N/A') return <td key={periodLabel} style={{ color: 'var(--text-secondary)' }}>-</td>;
                     return (

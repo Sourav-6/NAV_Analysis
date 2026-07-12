@@ -15,7 +15,7 @@ const CATEGORY_GROUPS = {
   ]
 };
 const PERIOD_LABELS = {
-  '1M': '1M', '3M': '3M', '6M': '6M', '1Y': '1Y', '3Y': '3Y', '5Y': '5Y', '10Y': '10Y',
+  '1M': '1M', '3M': '3M', '6M': '6M', '1Y': '1Y', '3Y': '3Y', '5Y': '5Y', '10Y': '10Y', '15Y': '15Y',
   '1Y_AVG': '1Y Avg', '3Y_AVG': '3Y Avg', '5Y_AVG': '5Y Avg'
 };
 
@@ -112,7 +112,7 @@ const CategoryView = ({ onSelectScheme, plan, setPlan }) => {
            // Only keep keys where at least ONE scheme has actual data
            const keys = allKeys.filter(k => processedData.some(scheme => scheme.returns[k] !== -Infinity));
            
-           const order = ['1M', '3M', '6M', '1Y', '3Y', '5Y', '10Y'];
+           const order = ['1M', '3M', '6M', '1Y', '3Y', '5Y', '10Y', '15Y'];
            const calendar = keys.filter(k => k === 'YTD' || (!isNaN(parseInt(k)) && parseInt(k) > 2000)).sort((a,b) => {
               if(a === 'YTD') return -1;
               if(b === 'YTD') return 1;

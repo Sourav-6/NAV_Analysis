@@ -234,18 +234,14 @@ export const calculateCalendarReturns = (navData) => {
     // Find the start NAV for this year (end of previous year)
     let startNavData = findClosestNav(navData, endOfPrevYearDate);
 
-    // If end of previous year is before fund inception, it means the fund started IN this year.
-    // We only calculate a return if it's the CURRENT year (YTD). 
-    // Otherwise, it wasn't active for the full calendar year, so we return N/A.
-    if (isAfter(oldestDate, endOfPrevYearDate)) {
-      if (year === currentYear) {
-        startNavData = navData[navData.length - 1]; // Use inception NAV for YTD
-      } else {
-        return { label, value: 'N/A' }; // Don't show partial year returns for past years
-      }
+    if (!endNavData || !startNavData) {
+        return { label, value: 'N/A' };
     }
 
-    if (!endNavData || !startNavData) {
+    // Check if the gap between the target start date and the available start data exceeds the 5-day threshold
+    // This correctly handles YTD for funds launched mid-year (e.g. if fund started in April, YTD from Jan 1 will fail this check)
+    const startNavDateObj = parseDate(startNavData.date);
+    if (Math.abs(differenceInDays(endOfPrevYearDate, startNavDateObj)) > MAX_NAV_GAP_DAYS) {
         return { label, value: 'N/A' };
     }
 

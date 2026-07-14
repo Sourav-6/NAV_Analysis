@@ -2,12 +2,19 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2, AlertCircle, Settings, Save, PlusCircle, Award, Check } from 'lucide-react';
 import { getRankingConfig, updateRankingConfig, calculateRankings } from '../utils/api';
 
-const CATEGORY_OPTIONS = [
-  'Large Cap',
-  'Mid Cap',
-  'Small Cap',
-  'Flexi Cap',
-  'SIF'
+const CATEGORY_GROUPS = [
+  {
+    name: 'Equity',
+    options: ['Large Cap', 'Mid Cap', 'Small Cap', 'Large & Mid Cap', 'Flexi Cap', 'Multi Cap', 'ELSS', 'Focused Fund', 'Value Fund', 'Sectoral', 'SIF']
+  },
+  {
+    name: 'Debt / Fixed Income',
+    options: ['Liquid Fund', 'Overnight Fund', 'Money Market Fund', 'Short Duration Fund', 'Corporate Bond Fund', 'Dynamic Bond', 'Gilt Fund']
+  },
+  {
+    name: 'Hybrid & Other',
+    options: ['Dynamic Asset Allocation', 'Aggressive Hybrid Fund', 'Conservative Hybrid Fund', 'Multi Asset Allocation', 'Index Funds']
+  }
 ];
 
 const PERIOD_OPTIONS = [
@@ -27,9 +34,16 @@ const WINDOW_OPTIONS = [
 ];
 
 const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan }) => {
-  const [category, setCategory] = useState(CATEGORY_OPTIONS[0]);
+  const [categories, setCategories] = useState([CATEGORY_GROUPS[0].options[0]]);
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [analysisPeriod, setAnalysisPeriod] = useState('3Y');
   const [rollingWindow, setRollingWindow] = useState('1Y');
+  const [localPlan, setLocalPlan] = useState(plan || 'direct');
+  
+  // Sync with prop if it changes externally
+  useEffect(() => {
+    if (plan) setLocalPlan(plan);
+  }, [plan]);
   
   // Algorithm configuration (weights and risk-free rate)
   const [config, setConfig] = useState({
@@ -87,30 +101,35 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan }) => {
   }, [selectedSchemes]);
 
   // Calculate rankings when inputs or saved configs change
-  const handleCalculate = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const data = await calculateRankings({
-        category,
-        plan,
-        analysisPeriod,
-        rollingWindow,
-        // Send config overrides in body
-        config
-      });
-      setRankedFunds(data);
-    } catch (err) {
-      console.error(err);
-      setError('Failed to compute fund rankings. Please ensure NAV history data is fully synced.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Uses a request counter to prevent stale responses from overwriting newer ones
+  const requestIdRef = React.useRef(0);
 
   useEffect(() => {
-    handleCalculate();
-  }, [category, plan, analysisPeriod, rollingWindow]);
+    const currentRequestId = ++requestIdRef.current;
+    setIsLoading(true);
+    setError(null);
+
+    calculateRankings({
+      categories,
+      plan: localPlan,
+      analysisPeriod,
+      rollingWindow,
+      config
+    }).then(data => {
+      // Only update if this is still the latest request
+      if (currentRequestId === requestIdRef.current) {
+        setRankedFunds(data);
+        setIsLoading(false);
+      }
+    }).catch(err => {
+      if (currentRequestId === requestIdRef.current) {
+        console.error(err);
+        setError('Failed to compute fund rankings. Please ensure NAV history data is fully synced.');
+        setIsLoading(false);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories, analysisPeriod, rollingWindow, localPlan]);
 
   // Update weights in the database
   const handleSaveConfig = async (e) => {
@@ -133,8 +152,14 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan }) => {
 
       await updateRankingConfig(config);
       setIsConfigOpen(false);
-      // Re-trigger calculation
-      handleCalculate();
+      // Re-trigger calculation by bumping the request counter
+      requestIdRef.current++;
+      const currentRequestId = ++requestIdRef.current;
+      setIsLoading(true);
+      setError(null);
+      calculateRankings({ categories, plan: localPlan, analysisPeriod, rollingWindow, config })
+        .then(data => { if (currentRequestId === requestIdRef.current) { setRankedFunds(data); setIsLoading(false); } })
+        .catch(err => { if (currentRequestId === requestIdRef.current) { console.error(err); setError('Failed to compute fund rankings.'); setIsLoading(false); } });
     } catch (err) {
       console.error(err);
       alert('Failed to save configuration.');
@@ -148,6 +173,16 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan }) => {
       ...prev,
       [key]: parseFloat(val) || 0
     }));
+  };
+
+  const toggleCategory = (cat) => {
+    if (categories.includes(cat)) {
+      if (categories.length > 1) { // prevent empty selection
+        setCategories(categories.filter(c => c !== cat));
+      }
+    } else {
+      setCategories([...categories, cat]);
+    }
   };
 
   // Helper for rendering percentile badges
@@ -164,11 +199,10 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan }) => {
       <div className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--spacing-md)', flexWrap: 'wrap' }}>
         <div className="flex gap-md" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Category Dropdown */}
-          <div className="flex-col gap-xs">
+          <div className="flex-col gap-xs" style={{ position: 'relative', zIndex: 50 }}>
             <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Category</span>
-            <select 
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
+            <button 
+              onClick={() => setIsCategoryOpen(!isCategoryOpen)}
               style={{
                 background: 'var(--bg-color)',
                 border: '1px solid var(--panel-border)',
@@ -177,13 +211,63 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan }) => {
                 borderRadius: '6px',
                 fontSize: '0.9rem',
                 cursor: 'pointer',
-                outline: 'none'
+                outline: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                minWidth: '160px',
+                justifyContent: 'space-between',
+                whiteSpace: 'nowrap'
               }}
             >
-              {CATEGORY_OPTIONS.map(opt => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
+              {categories.length === 1 ? categories[0] : `${categories.length} Categories`}
+              <span style={{ fontSize: '0.7rem' }}>▼</span>
+            </button>
+            {isCategoryOpen && (
+              <>
+                <div 
+                  style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9998 }} 
+                  onClick={() => setIsCategoryOpen(false)}
+                />
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  marginTop: '4px',
+                  background: 'var(--bg-color)',
+                  border: '1px solid var(--panel-border)',
+                  borderRadius: '6px',
+                  padding: '8px',
+                  zIndex: 9999,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  minWidth: '220px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                }}>
+                  {CATEGORY_GROUPS.map(group => (
+                    <div key={group.name} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', padding: '6px 4px 2px 4px', borderBottom: '1px solid var(--panel-border)' }}>
+                        {group.name}
+                      </div>
+                      {group.options.map(opt => (
+                        <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', color: 'var(--text-primary)', cursor: 'pointer', padding: '4px', whiteSpace: 'nowrap' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={categories.includes(opt)} 
+                            onChange={() => toggleCategory(opt)} 
+                            style={{ cursor: 'pointer' }}
+                          />
+                          {opt}
+                        </label>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Analysis Period Dropdown */}
@@ -230,6 +314,43 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan }) => {
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
+          </div>
+          
+          {/* Plan Toggle */}
+          <div className="flex-col gap-xs">
+            <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Plan</span>
+            <div style={{ display: 'flex', background: 'var(--bg-color)', border: '1px solid var(--panel-border)', borderRadius: '6px', padding: '2px', height: '100%', minHeight: '35px' }}>
+              <button
+                onClick={() => setLocalPlan('direct')}
+                style={{
+                  flex: 1, padding: '4px 16px', border: 'none', outline: 'none', cursor: 'pointer', fontSize: '0.9rem',
+                  background: localPlan === 'direct' ? 'var(--panel-bg)' : 'transparent',
+                  color: localPlan === 'direct' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  fontWeight: localPlan === 'direct' ? 500 : 400,
+                  borderRadius: '4px',
+                  boxShadow: localPlan === 'direct' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                  transition: 'all 0.2s ease',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+              >
+                Direct
+              </button>
+              <button
+                onClick={() => setLocalPlan('regular')}
+                style={{
+                  flex: 1, padding: '4px 16px', border: 'none', outline: 'none', cursor: 'pointer', fontSize: '0.9rem',
+                  background: localPlan === 'regular' ? 'var(--panel-bg)' : 'transparent',
+                  color: localPlan === 'regular' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  fontWeight: localPlan === 'regular' ? 500 : 400,
+                  borderRadius: '4px',
+                  boxShadow: localPlan === 'regular' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                  transition: 'all 0.2s ease',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+              >
+                Regular
+              </button>
+            </div>
           </div>
         </div>
 
@@ -378,6 +499,7 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan }) => {
                 <tr>
                   <th style={{ width: '60px', textAlign: 'center' }}>Rank</th>
                   <th style={{ textAlign: 'left', minWidth: '250px' }}>Fund Name</th>
+                  <th style={{ textAlign: 'center' }}>Period Return</th>
                   <th style={{ textAlign: 'center' }}>Overall Score</th>
                   <th style={{ textAlign: 'center' }}>Daily Leadership</th>
                   <th style={{ textAlign: 'center' }}>Recent Leadership</th>
@@ -405,6 +527,9 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan }) => {
                       </td>
                       <td className="scheme-name" style={{ textAlign: 'left', fontWeight: 500 }}>
                         {fund.schemeName}
+                      </td>
+                      <td style={{ textAlign: 'center', fontWeight: 600, color: fund.analysisPeriodReturn >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                        {fund.analysisPeriodReturn?.toFixed(2)}%
                       </td>
                       <td style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.95rem', color: 'var(--brand-blue)' }}>
                         {fund.overallScore.toFixed(1)}

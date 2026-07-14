@@ -168,6 +168,7 @@ const RankingAnalysis = ({
               <tr>
                 <th style={{ width: '50px', textAlign: 'center' }}>Rank</th>
                 <th style={{ textAlign: 'left', minWidth: '200px' }}>Fund Name</th>
+                <th style={{ textAlign: 'center' }}>Period Return</th>
                 <th style={{ textAlign: 'center' }}>Overall</th>
                 <th style={{ textAlign: 'center' }}>Daily Lead.</th>
                 <th style={{ textAlign: 'center' }}>Recent Lead.</th>
@@ -199,6 +200,9 @@ const RankingAnalysis = ({
                         <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: color, flexShrink: 0 }} />
                         {fund.schemeName}
                       </div>
+                    </td>
+                    <td style={{ textAlign: 'center', fontWeight: 600, color: fund.analysisPeriodReturn >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                      {fund.analysisPeriodReturn?.toFixed(2)}%
                     </td>
                     <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--brand-blue, var(--accent-primary))' }}>
                       {fund.overallScore.toFixed(1)}

@@ -12,7 +12,7 @@ function App() {
   const [activeView, setActiveView] = useState('comparison'); // 'comparison' or 'ranking'
   const [dataStatus, setDataStatus] = useState(null);
   const [showGraph, setShowGraph] = useState(false);
-  const [isSplitView, setIsSplitView] = useState(true);
+  const [isSplitView, setIsSplitView] = useState(false);
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved;
@@ -41,13 +41,19 @@ function App() {
       await fetch('http://localhost:3001/api/data/update', { method: 'POST' });
       
       const poll = setInterval(async () => {
-        const res = await fetch('http://localhost:3001/api/status');
-        if (res.ok) {
-          const data = await res.json();
-          if (!data.isUpdating) {
-            clearInterval(poll);
-            window.location.reload();
+        try {
+          const res = await fetch('http://localhost:3001/api/status');
+          if (res.ok) {
+            const data = await res.json();
+            if (!data.isUpdating) {
+              clearInterval(poll);
+              window.location.reload();
+            }
           }
+        } catch (err) {
+          // If server disconnects (e.g. restarts or crashes), wait for it to come back up.
+          // We won't clear the interval because we want to keep checking until it reconnects.
+          console.warn('Backend unavailable, retrying...');
         }
       }, 2000);
     } catch (e) {

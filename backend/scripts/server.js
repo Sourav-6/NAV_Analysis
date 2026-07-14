@@ -119,7 +119,7 @@ app.get('/api/status', (req, res) => {
  */
 app.get('/api/schemes', (req, res) => {
   if (!db) return res.json([]);
-  const schemes = db.prepare('SELECT schemeCode, schemeName FROM schemes').all();
+  const schemes = db.prepare("SELECT schemeCode, schemeName FROM schemes WHERE LOWER(schemeName) NOT LIKE '%institutional%'").all();
   res.json(schemes);
 });
 
@@ -136,7 +136,7 @@ app.get('/api/schemes/search', (req, res) => {
   const keywords = query.split(/\s+/);
   
   // We can build a dynamic LIKE query
-  let sql = 'SELECT schemeCode, schemeName FROM schemes WHERE 1=1';
+  let sql = "SELECT schemeCode, schemeName FROM schemes WHERE LOWER(schemeName) NOT LIKE '%institutional%'";
   const params = [];
   
   for (const kw of keywords) {
@@ -161,10 +161,11 @@ app.post('/api/data/update', (req, res) => {
   }
   isUpdating = true;
   
-  exec('npm run update-data && npm run update-sif', { cwd: PROJECT_ROOT }, (error, stdout, stderr) => {
+  exec('npm run update-data && npm run update-sif', { cwd: path.join(PROJECT_ROOT, 'backend') }, (error, stdout, stderr) => {
     isUpdating = false;
     if (error) {
       console.error('Update failed:', error);
+      console.error('Stderr:', stderr);
     } else {
       console.log('Update finished successfully. Reloading memory...');
       loadData();
@@ -181,7 +182,7 @@ app.get('/api/schemes/category/:category', (req, res) => {
   const plan = (req.query.plan || 'direct').toLowerCase();
   const keywords = category.split(/\s+/);
 
-  let sql = "SELECT schemeCode, schemeName FROM schemes WHERE LOWER(schemeName) LIKE '%growth%' AND LOWER(schemeName) NOT LIKE '%idcw%' AND LOWER(schemeName) NOT LIKE '%dividend%'";
+  let sql = "SELECT schemeCode, schemeName FROM schemes WHERE LOWER(schemeName) LIKE '%growth%' AND LOWER(schemeName) NOT LIKE '%idcw%' AND LOWER(schemeName) NOT LIKE '%dividend%' AND LOWER(schemeName) NOT LIKE '%institutional%'";
   
   if (plan === 'direct') {
     sql += " AND LOWER(schemeName) LIKE '%direct%'";
@@ -533,15 +534,12 @@ function computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights) 
   });
 
   // Aggregate percentiles for each fund
+  const expectedWindows = windows.length;
   const rankedFunds = validSchemes.map(s => {
     const scores = fundWindowScores[s.schemeCode];
-    if (scores.length === 0) {
-      return {
-        schemeCode: s.schemeCode,
-        schemeName: s.schemeName,
-        overallScore: 0, dailyLeadership: 0, recentLeadership: 0,
-        sortinoScore: 0, mddScore: 0, ulcerScore: 0
-      };
+    // Strictly require the fund to be present in all computed windows
+    if (scores.length !== expectedWindows) {
+      return null;
     }
 
     let sumReturn = 0, sumSortino = 0, sumMdd = 0, sumUlcer = 0;
@@ -573,17 +571,33 @@ function computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights) 
       w_ulcer * ulcerScore
     );
 
+    // Calculate analysis period return
+    let firstNav = null;
+    for (let i = 0; i < s.history.length; i++) {
+      if (s.history[i].time >= T_start_time) {
+        firstNav = s.history[i].nav;
+        break;
+      }
+    }
+    const lastNav = s.history[s.history.length - 1].nav;
+    let analysisPeriodReturn = 0;
+    if (firstNav && lastNav && firstNav > 0) {
+      // Annualized Return (CAGR) since endYears >= 1
+      analysisPeriodReturn = (Math.pow(lastNav / firstNav, 1 / endYears) - 1) * 100;
+    }
+
     return {
       schemeCode: s.schemeCode,
       schemeName: s.schemeName,
       overallScore: parseFloat(overallScore.toFixed(2)),
+      analysisPeriodReturn: parseFloat(analysisPeriodReturn.toFixed(2)),
       dailyLeadership: parseFloat(dailyLeadership.toFixed(2)),
       recentLeadership: parseFloat(recentLeadership.toFixed(2)),
       sortinoScore: parseFloat(sortinoScore.toFixed(2)),
       mddScore: parseFloat(mddScore.toFixed(2)),
       ulcerScore: parseFloat(ulcerScore.toFixed(2))
     };
-  });
+  }).filter(fund => fund !== null);
 
   rankedFunds.sort((a, b) => b.overallScore - a.overallScore);
   return rankedFunds;
@@ -645,7 +659,9 @@ function fetchAndParseHistories(schemesList) {
 app.post('/api/ranking/calculate', (req, res) => {
   if (!db) return res.status(500).json({ error: 'Database not ready' });
 
-  const category = (req.body.category || '').toLowerCase();
+  const categories = Array.isArray(req.body.categories) 
+    ? req.body.categories 
+    : (req.body.category ? [req.body.category] : []);
   const plan = (req.body.plan || 'direct').toLowerCase();
   const analysisPeriod = req.body.analysisPeriod || '3Y';
   const rollingWindow = req.body.rollingWindow || '1Y';
@@ -654,8 +670,7 @@ app.post('/api/ranking/calculate', (req, res) => {
     const weights = resolveWeights(req.body.config);
 
     // Query schemes in this category & plan
-    const keywords = category.split(/\s+/);
-    let categorySql = "SELECT schemeCode, schemeName, schemeCategory FROM schemes WHERE LOWER(schemeName) LIKE '%growth%' AND LOWER(schemeName) NOT LIKE '%idcw%' AND LOWER(schemeName) NOT LIKE '%dividend%'";
+    let categorySql = "SELECT schemeCode, schemeName, schemeCategory FROM schemes WHERE LOWER(schemeName) LIKE '%growth%' AND LOWER(schemeName) NOT LIKE '%idcw%' AND LOWER(schemeName) NOT LIKE '%dividend%' AND LOWER(schemeName) NOT LIKE '%institutional%'";
     
     if (plan === 'direct') {
       categorySql += " AND LOWER(schemeName) LIKE '%direct%'";
@@ -663,16 +678,18 @@ app.post('/api/ranking/calculate', (req, res) => {
       categorySql += " AND (LOWER(schemeName) NOT LIKE '%direct%' OR LOWER(schemeName) LIKE '%regular%')";
     }
 
-    if (category === 'sif') {
-      categorySql += " AND LOWER(schemeCategory) LIKE '%specialized investment fund%'";
-    } else if (category === 'large cap') {
-      categorySql += " AND LOWER(schemeCategory) LIKE '%large%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%mid%'";
-    } else if (category === 'mid cap') {
-      categorySql += " AND LOWER(schemeCategory) LIKE '%mid%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%large%'";
-    } else {
-      for (const kw of keywords) {
-        categorySql += ` AND LOWER(schemeCategory) LIKE '%${kw.replace(/'/g, "''")}'%'`;
-      }
+    if (categories.length > 0) {
+      const catConditions = categories.map(cat => {
+        const c = cat.toLowerCase();
+        if (c === 'sif') return "LOWER(schemeCategory) LIKE '%specialized investment fund%'";
+        if (c === 'large cap') return "(LOWER(schemeCategory) LIKE '%large%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%mid%')";
+        if (c === 'mid cap') return "(LOWER(schemeCategory) LIKE '%mid%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%large%')";
+        if (c === 'small cap') return "(LOWER(schemeCategory) LIKE '%small%' AND LOWER(schemeCategory) LIKE '%cap%')";
+        // Fallback generic logic for any new category string
+        const keywords = c.split(/\s+/);
+        return '(' + keywords.map(kw => `LOWER(schemeCategory) LIKE '%${kw.replace(/'/g, "''")}%'`).join(' AND ') + ')';
+      });
+      categorySql += ` AND (${catConditions.join(' OR ')})`;
     }
 
     const schemesList = db.prepare(categorySql).all();

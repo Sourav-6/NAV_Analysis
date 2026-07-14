@@ -345,13 +345,12 @@ async function main() {
       startDate.setFullYear(startDate.getFullYear() - YEARS_TO_FETCH);
     } else {
       const metadata = JSON.parse(metaRecord.value);
-      // Use actual latest NAV date from DB, not the stored metadata (which may be the request date)
-      const actualLatest = db.prepare("SELECT MAX(date) as maxDate FROM nav_history").get();
-      if (actualLatest && actualLatest.maxDate) {
-        const latestTs = parseDateString(actualLatest.maxDate);
-        startDate = new Date(latestTs);
-      } else {
+      // Use the lastNavDate stored in metadata, which was properly calculated using javascript date parsing
+      if (metadata.lastNavDate) {
         startDate = new Date(metadata.lastNavDate);
+      } else {
+        startDate = new Date();
+        startDate.setFullYear(startDate.getFullYear() - YEARS_TO_FETCH);
       }
       // Go back 3 days to fill any gaps from late-published NAVs
       startDate.setDate(startDate.getDate() - 3);
@@ -485,15 +484,26 @@ async function main() {
     ? existingMetadata.dataRangeStart
     : formatDateForDisplay(startDate);
 
-  // Determine the actual latest NAV date from the database, not the request date
+  // Determine the true latest NAV date from the database by parsing the date strings
   let actualLastNavDate;
-  const latestRow = db.prepare("SELECT MAX(date) as maxDate FROM nav_history").get();
-  if (latestRow && latestRow.maxDate) {
-    const ts = parseDateString(latestRow.maxDate);
-    actualLastNavDate = formatDateForDisplay(new Date(ts));
+  
+  process.stdout.write('\n📊 Calculating true metadata (this takes a few seconds)...');
+  const distinctDates = db.prepare('SELECT DISTINCT date FROM nav_history').all();
+  let maxDate = new Date(-8640000000000000);
+  
+  distinctDates.forEach(r => {
+    const d = parseDateString(r.date);
+    if (d.getTime() > 0 && d > maxDate) {
+      maxDate = d;
+    }
+  });
+
+  if (maxDate.getTime() > -8640000000000000) {
+    actualLastNavDate = formatDateForDisplay(maxDate);
   } else {
     actualLastNavDate = formatDateForDisplay(endDate);
   }
+  console.log(' Done');
 
   const newEndDate = actualLastNavDate;
 

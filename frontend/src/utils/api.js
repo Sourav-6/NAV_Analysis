@@ -116,11 +116,12 @@ export const getSchemesByCategory = async (category, plan = 'direct') => { // 'L
     const isDirect = name.includes('direct');
     const isGrowth = name.includes('growth');
     const isIDCW = name.includes('idcw') || name.includes('dividend');
+    const isInstitutional = name.includes('institutional');
     
     const planMatches = plan === 'direct' ? isDirect : (!isDirect || name.includes('regular'));
     
     // Some sanity filters to remove edge cases
-    return matchesCategory && planMatches && isGrowth && !isIDCW;
+    return matchesCategory && planMatches && isGrowth && !isIDCW && !isInstitutional;
   });
 };
 
@@ -145,7 +146,7 @@ export const searchSchemes = async (query) => {
   return allSchemes
     .filter(s => {
       const name = s.schemeName.toLowerCase();
-      return keywords.every(kw => name.includes(kw));
+      return !name.includes('institutional') && keywords.every(kw => name.includes(kw));
     })
     .slice(0, 50);
 };

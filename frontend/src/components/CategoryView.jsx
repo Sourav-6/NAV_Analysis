@@ -272,8 +272,9 @@ const CategoryView = ({ onSelectScheme, plan, setPlan }) => {
 
       {/* Data Table */}
       {!isLoading && !error && tableData.length > 0 && (
-        <div className="table-container" style={{ maxHeight: 'none', height: 'auto', overflowX: 'auto' }}>
-          <table className="data-table">
+        <div className="glass-panel" style={{ padding: 0, overflow: 'hidden', width: '100%' }}>
+          <div className="table-container" style={{ maxHeight: 'none', height: 'auto', overflowX: 'auto', border: 'none', borderRadius: 0 }}>
+            <table className="data-table" style={{ minWidth: '100%' }}>
             <thead>
               <tr>
                 <th 
@@ -311,6 +312,8 @@ const CategoryView = ({ onSelectScheme, plan, setPlan }) => {
                     </div>
                   </th>
                 ))}
+                {/* Filler column to absorb remaining width */}
+                <th style={{ width: '100%', background: 'var(--panel-bg)', borderBottom: '1px solid var(--panel-border)' }}></th>
               </tr>
             </thead>
             <tbody>
@@ -381,10 +384,13 @@ const CategoryView = ({ onSelectScheme, plan, setPlan }) => {
                       </td>
                     );
                   })}
+                  {/* Filler cell */}
+                  <td style={{ width: '100%' }}></td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
         </div>
       )}
     </div>

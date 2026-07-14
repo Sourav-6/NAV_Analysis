@@ -23,7 +23,7 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import Database from 'better-sqlite3';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -161,16 +161,40 @@ app.post('/api/data/update', (req, res) => {
   }
   isUpdating = true;
   
-  exec('npm run update-data && npm run update-sif', { cwd: path.join(PROJECT_ROOT, 'backend') }, (error, stdout, stderr) => {
-    isUpdating = false;
-    if (error) {
-      console.error('Update failed:', error);
-      console.error('Stderr:', stderr);
-    } else {
+  const runNodeScript = (scriptName, args = []) => {
+    return new Promise((resolve, reject) => {
+      const scriptPath = path.join(PROJECT_ROOT, 'scripts', scriptName);
+      console.log(`[UPDATE] Spawning node ${scriptPath} ${args.join(' ')}`);
+      
+      const child = spawn(process.execPath, [scriptPath, ...args], { 
+        cwd: PROJECT_ROOT, 
+        stdio: 'pipe'
+      });
+      
+      let stderr = '';
+      child.stderr.on('data', d => stderr += d.toString());
+      child.stdout.on('data', d => console.log(`[UPDATE] ${d.toString().trim()}`));
+      
+      child.on('close', code => {
+        if (code !== 0) reject(new Error(`${scriptName} failed (exit ${code}): ${stderr}`));
+        else resolve();
+      });
+      child.on('error', reject);
+    });
+  };
+
+  (async () => {
+    try {
+      await runNodeScript('fetch-all-nav.js', ['--update']);
+      await runNodeScript('fetch-sif-nav.js', ['--update']);
       console.log('Update finished successfully. Reloading memory...');
       loadData();
+    } catch (error) {
+      console.error('Update failed:', error);
+    } finally {
+      isUpdating = false;
     }
-  });
+  })();
   
   res.json({ status: 'started' });
 });

@@ -71,7 +71,10 @@ function formatDateForAMFI(date) {
 }
 
 function formatDateForDisplay(date) {
-  return date.toISOString().slice(0, 10);
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function sleep(ms) {
@@ -488,17 +491,24 @@ async function main() {
   let actualLastNavDate;
   
   process.stdout.write('\n📊 Calculating true metadata (this takes a few seconds)...');
-  const distinctDates = db.prepare('SELECT DISTINCT date FROM nav_history').all();
-  let maxDate = new Date(-8640000000000000);
+  const distinctDates = db.prepare(`
+    SELECT DISTINCT nh.date 
+    FROM nav_history nh
+    JOIN schemes s ON nh.schemeCode = s.schemeCode
+    WHERE LOWER(s.schemeCategory) NOT LIKE '%specialized%'
+  `).all();
+  let maxTimestamp = -8640000000000000;
   
   distinctDates.forEach(r => {
     const d = parseDateString(r.date);
-    if (d.getTime() > 0 && d > maxDate) {
-      maxDate = d;
+    if (d > 0 && d > maxTimestamp) {
+      maxTimestamp = d;
     }
   });
 
-  if (maxDate.getTime() > -8640000000000000) {
+  const maxDate = new Date(maxTimestamp);
+
+  if (maxTimestamp > -8640000000000000) {
     actualLastNavDate = formatDateForDisplay(maxDate);
   } else {
     actualLastNavDate = formatDateForDisplay(endDate);

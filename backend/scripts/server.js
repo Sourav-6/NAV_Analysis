@@ -329,6 +329,110 @@ app.get('/api/nav/:schemeCode/summary', (req, res) => {
   }
 });
 
+/**
+ * GET /api/nav/:schemeCode/ulcer-history
+ * Returns the daily rolling Ulcer Index values for a specific fund.
+ */
+app.get('/api/nav/:schemeCode/ulcer-history', (req, res) => {
+  if (!db) return res.status(500).json({ error: 'Database not ready' });
+  const schemeCode = parseInt(req.params.schemeCode);
+  const analysisPeriod = req.query.analysisPeriod || '3Y';
+  const rollingWindow = req.query.rollingWindow || '1Y';
+  const referenceDate = req.query.referenceDate;
+
+  const schemeMeta = db.prepare('SELECT * FROM schemes WHERE schemeCode = ?').get(schemeCode);
+  if (!schemeMeta) {
+    return res.status(404).json({ error: 'Scheme not found', schemeCode });
+  }
+
+  try {
+    const history = db.prepare('SELECT date, nav FROM nav_history WHERE schemeCode = ?').all(schemeCode);
+    if (history.length < 10) {
+      return res.json([]);
+    }
+
+    const months = { 'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5, 'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11 };
+    const refTime = referenceDate ? new Date(referenceDate).getTime() : Infinity;
+
+    const historyParsed = history.map(h => {
+      const parts = h.date.split('-');
+      const dateObj = new Date(parseInt(parts[2]), months[parts[1]], parseInt(parts[0]));
+      return { dateStr: h.date, dateObj, time: dateObj.getTime(), nav: h.nav };
+    }).filter(h => h.time <= refTime);
+
+    if (historyParsed.length < 10) {
+      return res.json([]);
+    }
+
+    historyParsed.sort((a, b) => a.time - b.time);
+
+    const absoluteLatestTime = historyParsed[historyParsed.length - 1].time;
+    const endYears = parseInt(analysisPeriod);
+    const T_end = new Date(absoluteLatestTime);
+    const T_start = new Date(T_end);
+    T_start.setFullYear(T_start.getFullYear() - endYears);
+    const T_start_time = T_start.getTime();
+
+    const val = parseInt(rollingWindow);
+    let rollingWindowMs = 0;
+    if (rollingWindow.endsWith('M')) {
+      rollingWindowMs = val * 30.44 * 24 * 60 * 60 * 1000;
+    } else if (rollingWindow.endsWith('Y')) {
+      rollingWindowMs = val * 365.25 * 24 * 60 * 60 * 1000;
+    }
+
+    const ulcerHistory = [];
+    
+    // Find the first index that is >= T_start_time
+    let firstIdx = 0;
+    while (firstIdx < historyParsed.length && historyParsed[firstIdx].time < T_start_time) {
+      firstIdx++;
+    }
+
+    for (let i = firstIdx; i < historyParsed.length; i++) {
+      const endTime = historyParsed[i].time;
+      const startTime = endTime - rollingWindowMs;
+
+      // Find the start index for this rolling window
+      let startIdx = 0;
+      while (startIdx < i && historyParsed[startIdx].time < startTime) {
+        startIdx++;
+      }
+
+      const len = i - startIdx + 1;
+      if (len < 10) continue;
+
+      let peak = -Infinity;
+      let sumSqDD = 0;
+
+      for (let k = startIdx; k <= i; k++) {
+        const nav = historyParsed[k].nav;
+        if (nav > peak) peak = nav;
+        const dd = (nav - peak) / peak;
+        sumSqDD += dd * dd;
+      }
+
+      const ui = Math.sqrt(sumSqDD / len) * 100;
+
+      ulcerHistory.push({
+        date: convertDateFormat(historyParsed[i].dateStr),
+        value: parseFloat(ui.toFixed(2))
+      });
+    }
+
+    res.json({
+      schemeCode,
+      schemeName: schemeMeta.schemeName,
+      analysisPeriod,
+      rollingWindow,
+      ulcerHistory
+    });
+  } catch (err) {
+    console.error(`Error calculating ulcer history for ${schemeCode}:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── SRP Ranking Engine Endpoints ────────────────────────────────────────────
 
 /**
@@ -426,8 +530,7 @@ function computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights) 
   }
 
   // Generate sliding windows
-  // Slide by weekly intervals (5 trading days) to keep execution under 100ms
-  // while maintaining near-perfect ranking integrity.
+  // Slide by daily intervals as requested by the user
   const allDatesMap = new Map();
   validSchemes.forEach(s => {
     s.history.forEach(h => {
@@ -440,7 +543,7 @@ function computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights) 
   const sortedTimes = Array.from(allDatesMap.keys()).sort((a, b) => a - b);
   const windows = [];
 
-  for (let i = 0; i < sortedTimes.length; i += 5) {
+  for (let i = 0; i < sortedTimes.length; i += 1) {
     const windowStart = new Date(sortedTimes[i]);
     const windowEnd = new Date(windowStart);
 
@@ -526,9 +629,12 @@ function computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights) 
     fundWindowScores[s.schemeCode] = [];
   });
 
-  windowResults.forEach(winList => {
+  windowResults.forEach((winList, wIdx) => {
     const N = winList.length;
     if (N === 0) return;
+
+    const endD = windows[wIdx].end;
+    const dateStr = `${String(endD.getDate()).padStart(2, '0')}-${String(endD.getMonth()+1).padStart(2, '0')}-${endD.getFullYear()}`;
 
     winList.sort((a, b) => b.ret - a.ret);
     const returnRanks = {};
@@ -553,7 +659,13 @@ function computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights) 
       const p_mdd = N > 1 ? 100 * (N - mddRanks[code]) / (N - 1) : 100;
       const p_ulcer = N > 1 ? 100 * (N - uiRanks[code]) / (N - 1) : 100;
 
-      fundWindowScores[code].push({ p_return, p_sortino, p_mdd, p_ulcer });
+      fundWindowScores[code].push({ 
+        date: dateStr, 
+        p_return: parseFloat(p_return.toFixed(2)), 
+        p_sortino: parseFloat(p_sortino.toFixed(2)), 
+        p_mdd: parseFloat(p_mdd.toFixed(2)), 
+        p_ulcer: parseFloat(p_ulcer.toFixed(2)) 
+      });
     });
   });
 
@@ -624,7 +736,7 @@ function computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights) 
   }).filter(fund => fund !== null);
 
   rankedFunds.sort((a, b) => b.overallScore - a.overallScore);
-  return rankedFunds;
+  return { rankedFunds, fundWindowScores };
 }
 
 /**
@@ -650,9 +762,10 @@ function resolveWeights(reqConfig) {
 /**
  * Helper: fetch and parse NAV histories for given scheme list
  */
-function fetchAndParseHistories(schemesList) {
+function fetchAndParseHistories(schemesList, referenceDate) {
   const months = { 'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5, 'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11 };
   const parsedSchemes = [];
+  const refTime = referenceDate ? new Date(referenceDate).getTime() : Infinity;
 
   for (const s of schemesList) {
     const history = db.prepare('SELECT date, nav FROM nav_history WHERE schemeCode = ?').all(s.schemeCode);
@@ -662,7 +775,9 @@ function fetchAndParseHistories(schemesList) {
       const parts = h.date.split('-');
       const dateObj = new Date(parseInt(parts[2]), months[parts[1]], parseInt(parts[0]));
       return { dateStr: h.date, dateObj, time: dateObj.getTime(), nav: h.nav };
-    });
+    }).filter(h => h.time <= refTime);
+
+    if (historyParsed.length < 10) continue;
 
     historyParsed.sort((a, b) => a.time - b.time);
 
@@ -689,6 +804,7 @@ app.post('/api/ranking/calculate', (req, res) => {
   const plan = (req.body.plan || 'direct').toLowerCase();
   const analysisPeriod = req.body.analysisPeriod || '3Y';
   const rollingWindow = req.body.rollingWindow || '1Y';
+  const referenceDate = req.body.referenceDate;
 
   try {
     const weights = resolveWeights(req.body.config);
@@ -719,10 +835,10 @@ app.post('/api/ranking/calculate', (req, res) => {
     const schemesList = db.prepare(categorySql).all();
     if (schemesList.length === 0) return res.json([]);
 
-    const parsedSchemes = fetchAndParseHistories(schemesList);
+    const parsedSchemes = fetchAndParseHistories(schemesList, referenceDate);
     if (parsedSchemes.length === 0) return res.json([]);
 
-    const rankedFunds = computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights);
+    const { rankedFunds } = computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights);
     res.json(rankedFunds);
   } catch (err) {
     console.error('Error calculating fund rankings:', err);
@@ -741,6 +857,7 @@ app.post('/api/ranking/calculate-selected', (req, res) => {
   const schemeCodes = req.body.schemeCodes;
   const analysisPeriod = req.body.analysisPeriod || '3Y';
   const rollingWindow = req.body.rollingWindow || '1Y';
+  const referenceDate = req.body.referenceDate;
 
   if (!Array.isArray(schemeCodes) || schemeCodes.length < 2) {
     return res.status(400).json({ error: 'At least 2 scheme codes are required' });
@@ -752,18 +869,80 @@ app.post('/api/ranking/calculate-selected', (req, res) => {
     // Fetch scheme info for each code
     const placeholders = schemeCodes.map(() => '?').join(',');
     const schemesList = db.prepare(`SELECT schemeCode, schemeName FROM schemes WHERE schemeCode IN (${placeholders})`).all(...schemeCodes);
+    if (schemesList.length === 0) return res.json([]);
 
-    if (schemesList.length < 2) {
-      return res.json([]);
-    }
+    const parsedSchemes = fetchAndParseHistories(schemesList, referenceDate);
+    if (parsedSchemes.length === 0) return res.json([]);
 
-    const parsedSchemes = fetchAndParseHistories(schemesList);
-    if (parsedSchemes.length < 2) return res.json([]);
-
-    const rankedFunds = computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights);
+    const { rankedFunds } = computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights);
     res.json(rankedFunds);
   } catch (err) {
     console.error('Error calculating selected fund rankings:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/ranking/historical-metrics
+ * Runs the ranking algorithm but returns the historical series for the requested scheme codes
+ * Body: { categories: [string], plan: string, analysisPeriod: string, rollingWindow: string, schemeCodes: [number] }
+ */
+app.post('/api/ranking/historical-metrics', (req, res) => {
+  if (!db) return res.status(500).json({ error: 'Database not ready' });
+
+  const categories = Array.isArray(req.body.categories) 
+    ? req.body.categories 
+    : (req.body.category ? [req.body.category] : []);
+  const plan = (req.body.plan || 'direct').toLowerCase();
+  const analysisPeriod = req.body.analysisPeriod || '3Y';
+  const rollingWindow = req.body.rollingWindow || '1Y';
+  const referenceDate = req.body.referenceDate;
+  const requestedCodes = req.body.schemeCodes || [];
+
+  try {
+    const weights = resolveWeights(req.body.config);
+
+    // Query schemes in this category & plan (same as /api/ranking/calculate)
+    let categorySql = "SELECT schemeCode, schemeName, schemeCategory FROM schemes WHERE LOWER(schemeName) LIKE '%growth%' AND LOWER(schemeName) NOT LIKE '%idcw%' AND LOWER(schemeName) NOT LIKE '%dividend%' AND LOWER(schemeName) NOT LIKE '%institutional%'";
+    
+    if (plan === 'direct') {
+      categorySql += " AND LOWER(schemeName) LIKE '%direct%'";
+    } else {
+      categorySql += " AND (LOWER(schemeName) NOT LIKE '%direct%' OR LOWER(schemeName) LIKE '%regular%')";
+    }
+
+    if (categories.length > 0) {
+      const catConditions = categories.map(cat => {
+        const c = cat.toLowerCase();
+        if (c === 'sif') return "LOWER(schemeCategory) LIKE '%specialized investment fund%'";
+        if (c === 'large cap') return "(LOWER(schemeCategory) LIKE '%large%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%mid%')";
+        if (c === 'mid cap') return "(LOWER(schemeCategory) LIKE '%mid%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%large%')";
+        if (c === 'small cap') return "(LOWER(schemeCategory) LIKE '%small%' AND LOWER(schemeCategory) LIKE '%cap%')";
+        const keywords = c.split(/\s+/);
+        return '(' + keywords.map(kw => `LOWER(schemeCategory) LIKE '%${kw.replace(/'/g, "''")}%'`).join(' AND ') + ')';
+      });
+      categorySql += ` AND (${catConditions.join(' OR ')})`;
+    }
+
+    const schemesList = db.prepare(categorySql).all();
+    if (schemesList.length === 0) return res.json({});
+
+    const parsedSchemes = fetchAndParseHistories(schemesList, referenceDate);
+    if (parsedSchemes.length === 0) return res.json({});
+
+    const { fundWindowScores } = computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights);
+    
+    // Filter to only requested scheme codes
+    const responseData = {};
+    for (const code of requestedCodes) {
+      if (fundWindowScores[code]) {
+        responseData[code] = fundWindowScores[code];
+      }
+    }
+    
+    res.json(responseData);
+  } catch (err) {
+    console.error('Error calculating historical metrics:', err);
     res.status(500).json({ error: err.message });
   }
 });

@@ -19,7 +19,7 @@ const PERIOD_LABELS = {
   '1Y_AVG': '1Y Avg', '3Y_AVG': '3Y Avg', '5Y_AVG': '5Y Avg'
 };
 
-const CategoryView = ({ onSelectScheme, plan, setPlan }) => {
+const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
   const [activeTabs, setActiveTabs] = useState([CATEGORY_GROUPS['Equity'][0]]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -86,10 +86,10 @@ const CategoryView = ({ onSelectScheme, plan, setPlan }) => {
           
           const batch = targetSchemes.slice(i, i + batchSize);
           const promises = batch.map(async (scheme) => {
-            const data = await getSchemeNavData(scheme.schemeCode);
+            const data = await getSchemeNavData(scheme.schemeCode, referenceDate);
             let returns = {};
             if (data && data.data) {
-              returns = calculateAllReturns(data.data);
+              returns = calculateAllReturns(data.data, referenceDate);
             }
             return { ...scheme, returns, navData: data?.data };
           });
@@ -136,7 +136,7 @@ const CategoryView = ({ onSelectScheme, plan, setPlan }) => {
     loadCategoryData();
     
     return () => { isMounted = false; };
-  }, [activeTabs, plan]);
+  }, [activeTabs, plan, referenceDate]);
 
   const formatReturn = (val) => {
     if (val === -Infinity || val === undefined || isNaN(val)) return '-';

@@ -33,7 +33,8 @@ const RankingAnalysis = ({
   rankedFunds, setRankedFunds,
   isLoading, setIsLoading,
   error, setError,
-  config, setConfig
+  config, setConfig,
+  referenceDate
 }) => {
   // Load config on mount
   useEffect(() => {
@@ -73,7 +74,8 @@ const RankingAnalysis = ({
           schemeCodes,
           analysisPeriod,
           rollingWindow,
-          config: config || undefined
+          config: config || undefined,
+          referenceDate
         });
         setRankedFunds(data);
       } catch (err) {
@@ -85,7 +87,7 @@ const RankingAnalysis = ({
     };
 
     fetchRankings();
-  }, [schemes.length, analysisPeriod, rollingWindow, config]);
+  }, [schemes.length, analysisPeriod, rollingWindow, config, referenceDate]);
 
   const getPercentileClass = (score) => {
     if (score >= 75) return 'q1';
@@ -233,7 +235,7 @@ const RankingAnalysis = ({
   );
 };
 
-const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
+const ComparisonDashboard = ({ schemes, theme = 'dark', referenceDate }) => {
   const [navDataMap, setNavDataMap] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [timeframe, setTimeframe] = useState('ALL'); 
@@ -260,7 +262,7 @@ const ComparisonDashboard = ({ schemes, theme = 'dark' }) => {
       const dataMap = {};
       const fetchPromises = schemes.map(async (scheme) => {
         if (!navDataMap[scheme.schemeCode]) {
-          const data = await getSchemeNavData(scheme.schemeCode);
+          const data = await getSchemeNavData(scheme.schemeCode, referenceDate);
           if (data && data.data) {
             dataMap[scheme.schemeCode] = data.data;
           }

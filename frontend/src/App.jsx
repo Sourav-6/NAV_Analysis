@@ -20,6 +20,7 @@ function App() {
   });
   const [plan, setPlan] = useState('direct');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [referenceDate, setReferenceDate] = useState('');
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -129,6 +130,21 @@ function App() {
             >
               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             </button>
+            <input 
+              type="date"
+              value={referenceDate}
+              onChange={(e) => setReferenceDate(e.target.value)}
+              title="Reference Date (Leave blank for today)"
+              style={{
+                borderRadius: '8px',
+                background: 'var(--panel-bg)',
+                border: '1px solid var(--panel-border)',
+                color: 'var(--text-primary)',
+                padding: '8px 12px',
+                fontSize: '0.9rem',
+                cursor: 'pointer'
+              }}
+            />
           </div>
         </div>
 
@@ -264,7 +280,7 @@ function App() {
                      </button>
                    </div>
                  </div>
-                 <ComparisonDashboard schemes={selectedSchemes} theme={theme} />
+                 <ComparisonDashboard schemes={selectedSchemes} theme={theme} referenceDate={referenceDate} />
               </div>
             )}
 
@@ -314,7 +330,7 @@ function App() {
                 </div>
               </div>
               
-              <CategoryView onSelectScheme={handleAddScheme} plan={plan} setPlan={setPlan} />
+              <CategoryView onSelectScheme={handleAddScheme} plan={plan} setPlan={setPlan} referenceDate={referenceDate} />
             </div>
           </div>
 
@@ -326,13 +342,13 @@ function App() {
                   Comparison
                 </h2>
               </div>
-              <ComparisonDashboard schemes={selectedSchemes} theme={theme} />
+              <ComparisonDashboard schemes={selectedSchemes} theme={theme} referenceDate={referenceDate} />
             </div>
           )}
         </main>
       ) : (
         <main style={{ marginTop: 'var(--spacing-xl)' }}>
-          <RankingDashboard onAddScheme={handleAddScheme} selectedSchemes={selectedSchemes} plan={plan} />
+          <RankingDashboard onAddScheme={handleAddScheme} selectedSchemes={selectedSchemes} plan={plan} referenceDate={referenceDate} />
         </main>
       )}
     </div>

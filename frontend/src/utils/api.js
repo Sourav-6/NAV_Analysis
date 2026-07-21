@@ -157,12 +157,23 @@ export const searchSchemes = async (query) => {
  * Fetches NAV data for a specific scheme code.
  * Uses local AMFI server strictly.
  */
-export const getSchemeNavData = async (schemeCode) => {
+export const getSchemeNavData = async (schemeCode, referenceDate) => {
   try {
     const url = `${LOCAL_API}/nav/${schemeCode}`;
     const response = await fetch(url);
     if (!response.ok) return null;
     const data = await response.json();
+    
+    if (referenceDate && data && data.data) {
+      const refTime = new Date(referenceDate).getTime();
+      const filteredData = data.data.filter(entry => {
+        const parts = entry.date.split('-');
+        const dateObj = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        return dateObj.getTime() <= refTime;
+      });
+      data.data = filteredData;
+    }
+    
     return data;
   } catch (error) {
     return null;
@@ -239,3 +250,42 @@ export const calculateSelectedRankings = async (params) => {
     return [];
   }
 };
+
+/**
+ * Fetches rolling Ulcer Index history for a fund.
+ */
+export const getUlcerHistory = async (schemeCode, params) => {
+  try {
+    const { analysisPeriod, rollingWindow, referenceDate } = params;
+    let url = `${LOCAL_API}/nav/${schemeCode}/ulcer-history?analysisPeriod=${analysisPeriod}&rollingWindow=${rollingWindow}`;
+    if (referenceDate) {
+      url += `&referenceDate=${encodeURIComponent(referenceDate)}`;
+    }
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Failed to fetch ulcer history');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching ulcer history:', error);
+    return null;
+  }
+};
+
+/**
+ * Fetches historical metrics (p_return, p_sortino, p_mdd, p_ulcer) for specific schemes
+ * @param {Object} params - { schemeCodes: number[], categories: string[], plan: string, analysisPeriod: string, rollingWindow: string, referenceDate: string }
+ */
+export const fetchHistoricalMetrics = async (params) => {
+  try {
+    const response = await fetch(`${LOCAL_API}/ranking/historical-metrics`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+    if (!response.ok) throw new Error('Failed to fetch historical metrics');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching historical metrics:', error);
+    return {};
+  }
+};
+

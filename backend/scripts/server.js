@@ -508,7 +508,7 @@ function computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights) 
   });
 
   if (parsedSchemes.length === 0 || absoluteLatestTime === 0) {
-    return [];
+    return { rankedFunds: [], fundWindowScores: {} };
   }
 
   // Filter for complete history
@@ -526,7 +526,7 @@ function computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights) 
   });
 
   if (validSchemes.length === 0) {
-    return [];
+    return { rankedFunds: [], fundWindowScores: {} };
   }
 
   // Generate sliding windows
@@ -559,7 +559,7 @@ function computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights) 
   }
 
   if (windows.length === 0) {
-    return [];
+    return { rankedFunds: [], fundWindowScores: {} };
   }
 
   // Calculate raw metrics for each scheme per window
@@ -669,43 +669,56 @@ function computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights) 
     });
   });
 
-  // Aggregate percentiles for each fund
+  // Calculate expanding/rolling SRP scores and ranks per window
   const expectedWindows = windows.length;
+  const windowScores = [];
+  for (let w = 0; w < expectedWindows; w++) {
+    windowScores.push({});
+  }
+
   const rankedFunds = validSchemes.map(s => {
     const scores = fundWindowScores[s.schemeCode];
-    // Strictly require the fund to be present in all computed windows
     if (scores.length !== expectedWindows) {
       return null;
     }
 
     let sumReturn = 0, sumSortino = 0, sumMdd = 0, sumUlcer = 0;
-    scores.forEach(sc => {
+    
+    // Calculate expanding scores for each window
+    for (let w = 0; w < expectedWindows; w++) {
+      const sc = scores[w];
       sumReturn += sc.p_return;
       sumSortino += sc.p_sortino;
       sumMdd += sc.p_mdd;
       sumUlcer += sc.p_ulcer;
-    });
 
-    const totalWindows = scores.length;
-    const dailyLeadership = sumReturn / totalWindows;
-    const sortinoScore = sumSortino / totalWindows;
-    const mddScore = sumMdd / totalWindows;
-    const ulcerScore = sumUlcer / totalWindows;
+      const totalWindows = w + 1;
+      const dailyLeadership = sumReturn / totalWindows;
+      const sortinoScore = sumSortino / totalWindows;
+      const mddScore = sumMdd / totalWindows;
+      const ulcerScore = sumUlcer / totalWindows;
 
-    const recentCount = Math.max(1, Math.round(totalWindows * 0.2));
-    let sumRecentReturn = 0;
-    for (let i = totalWindows - recentCount; i < totalWindows; i++) {
-      sumRecentReturn += scores[i].p_return;
+      const recentCount = Math.max(1, Math.round(totalWindows * 0.2));
+      let sumRecentReturn = 0;
+      for (let i = totalWindows - recentCount; i < totalWindows; i++) {
+        sumRecentReturn += scores[i].p_return;
+      }
+      const recentLeadership = sumRecentReturn / recentCount;
+
+      const overallScore = (
+        w_rrls_avg * dailyLeadership +
+        w_rrls_recent * recentLeadership +
+        w_sortino * sortinoScore +
+        w_mdd * mddScore +
+        w_ulcer * ulcerScore
+      );
+      
+      windowScores[w][s.schemeCode] = overallScore;
+      sc.p_overall = parseFloat(overallScore.toFixed(2));
     }
-    const recentLeadership = sumRecentReturn / recentCount;
 
-    const overallScore = (
-      w_rrls_avg * dailyLeadership +
-      w_rrls_recent * recentLeadership +
-      w_sortino * sortinoScore +
-      w_mdd * mddScore +
-      w_ulcer * ulcerScore
-    );
+    // The final aggregated scores correspond to the last window
+    const finalScore = scores[expectedWindows - 1];
 
     // Calculate analysis period return
     let firstNav = null;
@@ -718,22 +731,44 @@ function computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights) 
     const lastNav = s.history[s.history.length - 1].nav;
     let analysisPeriodReturn = 0;
     if (firstNav && lastNav && firstNav > 0) {
-      // Annualized Return (CAGR) since endYears >= 1
       analysisPeriodReturn = (Math.pow(lastNav / firstNav, 1 / endYears) - 1) * 100;
     }
 
     return {
       schemeCode: s.schemeCode,
       schemeName: s.schemeName,
-      overallScore: parseFloat(overallScore.toFixed(2)),
+      overallScore: finalScore.p_overall,
       analysisPeriodReturn: parseFloat(analysisPeriodReturn.toFixed(2)),
-      dailyLeadership: parseFloat(dailyLeadership.toFixed(2)),
-      recentLeadership: parseFloat(recentLeadership.toFixed(2)),
-      sortinoScore: parseFloat(sortinoScore.toFixed(2)),
-      mddScore: parseFloat(mddScore.toFixed(2)),
-      ulcerScore: parseFloat(ulcerScore.toFixed(2))
+      dailyLeadership: parseFloat((sumReturn / expectedWindows).toFixed(2)),
+      recentLeadership: (() => {
+        const rc = Math.max(1, Math.round(expectedWindows * 0.2));
+        let sr = 0;
+        for (let i = expectedWindows - rc; i < expectedWindows; i++) sr += scores[i].p_return;
+        return parseFloat((sr / rc).toFixed(2));
+      })(),
+      sortinoScore: parseFloat((sumSortino / expectedWindows).toFixed(2)),
+      mddScore: parseFloat((sumMdd / expectedWindows).toFixed(2)),
+      ulcerScore: parseFloat((sumUlcer / expectedWindows).toFixed(2))
     };
   }).filter(fund => fund !== null);
+
+  // Assign daily ranks based on expanding window scores
+  for (let w = 0; w < expectedWindows; w++) {
+    const fundsInWindow = Object.keys(windowScores[w]).map(code => ({
+      code,
+      score: windowScores[w][code]
+    }));
+    
+    // Sort descending by score
+    fundsInWindow.sort((a, b) => b.score - a.score);
+    
+    // Assign ranks
+    fundsInWindow.forEach((item, idx) => {
+      if (fundWindowScores[item.code] && fundWindowScores[item.code][w]) {
+        fundWindowScores[item.code][w].srp_rank = idx + 1;
+      }
+    });
+  }
 
   rankedFunds.sort((a, b) => b.overallScore - a.overallScore);
   return { rankedFunds, fundWindowScores };
@@ -934,11 +969,14 @@ app.post('/api/ranking/historical-metrics', (req, res) => {
     
     // Filter to only requested scheme codes
     const responseData = {};
+    console.log("Historical Metrics API - requestedCodes:", requestedCodes);
+    console.log("Historical Metrics API - fundWindowScores size:", Object.keys(fundWindowScores || {}).length);
     for (const code of requestedCodes) {
-      if (fundWindowScores[code]) {
+      if (fundWindowScores && fundWindowScores[code]) {
         responseData[code] = fundWindowScores[code];
       }
     }
+    console.log("Historical Metrics API - returning codes:", Object.keys(responseData));
     
     res.json(responseData);
   } catch (err) {

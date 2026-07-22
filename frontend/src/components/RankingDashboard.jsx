@@ -78,6 +78,8 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
   // Ulcer Index History Modal States
   const [activeMetric, setActiveMetric] = useState(null);
   const [selectedMetricFunds, setSelectedMetricFunds] = useState([]); // Array of { schemeCode, schemeName }
+  const [modalAnalysisPeriod, setModalAnalysisPeriod] = useState(analysisPeriod);
+  const [modalRollingWindow, setModalRollingWindow] = useState(rollingWindow);
   const [metricHistoryData, setMetricHistoryData] = useState({});
   const [isMetricLoading, setIsMetricLoading] = useState(false);
   const [metricTimeframe, setMetricTimeframe] = useState('ALL');
@@ -216,6 +218,7 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
 
   const getMetricTitle = (metric) => {
     switch (metric) {
+      case 'overallRank': return 'SRP Category Rank';
       case 'dailyLeadership': return 'Rolling Daily Leadership';
       case 'recentLeadership': return 'Rolling Recent Leadership';
       case 'sortinoScore': return 'Rolling Sortino Ratio';
@@ -272,8 +275,8 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
     fetchHistoricalMetrics({
       categories,
       plan: localPlan,
-      analysisPeriod,
-      rollingWindow,
+      analysisPeriod: modalAnalysisPeriod,
+      rollingWindow: modalRollingWindow,
       referenceDate,
       schemeCodes: selectedMetricFunds.map(f => f.schemeCode)
     }).then(results => {
@@ -285,7 +288,8 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
             const timeStr = `${parts[2]}-${parts[1]}-${parts[0]}`;
             
             let val = 0;
-            if (activeMetric === 'dailyLeadership' || activeMetric === 'recentLeadership') val = entry.p_return;
+            if (activeMetric === 'overallRank') val = entry.srp_rank;
+            else if (activeMetric === 'dailyLeadership' || activeMetric === 'recentLeadership') val = entry.p_return;
             else if (activeMetric === 'sortinoScore') val = entry.p_sortino;
             else if (activeMetric === 'mddScore') val = entry.p_mdd;
             else if (activeMetric === 'ulcerScore') val = entry.p_ulcer;
@@ -303,14 +307,14 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
     }).finally(() => {
       setIsMetricLoading(false);
     });
-  }, [selectedMetricFunds, activeMetric, categories, localPlan, analysisPeriod, rollingWindow, referenceDate]);
+  }, [selectedMetricFunds, activeMetric, categories, localPlan, modalAnalysisPeriod, modalRollingWindow, referenceDate]);
 
   const TIMEFRAME_VALUES = useMemo(() => ({
     '1M': 1/12, '3M': 3/12, '6M': 6/12, '1Y': 1, '3Y': 3, '5Y': 5, '10Y': 10
   }), []);
 
   const availableTimeframes = useMemo(() => {
-    const maxYears = parseInt(analysisPeriod);
+    const maxYears = modalAnalysisPeriod === 'ALL' ? 10 : parseInt(modalAnalysisPeriod);
     return ['1M', '3M', '6M', '1Y', '3Y', '5Y', '10Y', 'ALL'].filter(tf => {
       if (tf === 'ALL') return true;
       return TIMEFRAME_VALUES[tf] <= maxYears;
@@ -321,13 +325,20 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
     if (!metricHistoryData || Object.keys(metricHistoryData).length === 0) return {};
     
     const result = {};
-    const primaryFund = selectedMetricFunds[0];
-    if (!primaryFund || !metricHistoryData[primaryFund.schemeCode] || metricHistoryData[primaryFund.schemeCode].length === 0) return {};
+    
+    // Find absolute latest date across all funds that have data
+    let latestDate = new Date(0);
+    selectedMetricFunds.forEach(fund => {
+      const history = metricHistoryData[fund.schemeCode];
+      if (history && history.length > 0) {
+        const latestTimeStr = history[history.length - 1].time;
+        const parts = latestTimeStr.split('-');
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        if (d > latestDate) latestDate = d;
+      }
+    });
 
-    const primaryHistory = metricHistoryData[primaryFund.schemeCode];
-    const latestTimeStr = primaryHistory[primaryHistory.length - 1].time;
-    const parts = latestTimeStr.split('-');
-    const latestDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    if (latestDate.getTime() === 0) return {};
     
     let cutoffDate = new Date(latestDate);
     if (metricTimeframe === '1M') cutoffDate.setMonth(cutoffDate.getMonth() - 1);
@@ -393,7 +404,14 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
     
     // Make sure we have at least some data before rendering
     const hasData = selectedMetricFunds.some(f => filteredUlcerData[f.schemeCode] && filteredUlcerData[f.schemeCode].length > 0);
-    if (!hasData) return;
+    if (!hasData) {
+      if (ulcerChartInstance.current) {
+        ulcerChartInstance.current.remove();
+        ulcerChartInstance.current = null;
+        ulcerSeriesMap.current = {};
+      }
+      return;
+    }
 
     let chart = null;
     let resizeObserver = null;
@@ -429,6 +447,7 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
           rightPriceScale: {
             borderColor: isDark ? '#262626' : '#e5e7eb',
             scaleMargins: { top: 0.1, bottom: 0.1 },
+            invertScale: activeMetric === 'overallRank',
           },
           timeScale: {
             borderColor: isDark ? '#262626' : '#e5e7eb',
@@ -515,9 +534,10 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
             const val = dataPoint[fund.schemeCode];
             if (val !== undefined) {
               const color = COLORS[index % COLORS.length];
+              const displayVal = activeMetric === 'overallRank' ? `Rank ${Math.round(val)}` : val.toFixed(2);
               html += `<div style="display:flex; justify-content:space-between; gap:16px; font-size:13px; margin-bottom:4px;">
                 <span style="color:${color}">${fund.schemeName}</span>
-                <span style="font-weight:600">${val.toFixed(2)}</span>
+                <span style="font-weight:600">${displayVal}</span>
               </div>`;
             }
           });
@@ -558,7 +578,7 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
         ulcerSeriesMap.current = {};
       }
     };
-  }, [selectedMetricFunds, filteredUlcerData, metricChartHeight, isMetricFullView]);
+  }, [selectedMetricFunds, filteredUlcerData, metricChartHeight, isMetricFullView, activeMetric]);
 
   // Update weights in the database
   const handleSaveConfig = async (e) => {
@@ -960,7 +980,16 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
                       <td style={{ textAlign: 'center', fontWeight: 600, color: fund.analysisPeriodReturn >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                         {fund.analysisPeriodReturn?.toFixed(2)}%
                       </td>
-                      <td style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.95rem', color: 'var(--brand-blue)' }}>
+                      <td 
+                        style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.95rem', color: 'var(--brand-blue)', cursor: 'pointer', transition: 'transform 0.15s ease' }}
+                        onClick={() => {
+                          setActiveMetric('overallRank');
+                          setSelectedMetricFunds([{ schemeCode: fund.schemeCode, schemeName: fund.schemeName }]);
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                        title="Click to view historical rank movement"
+                      >
                         {fund.overallScore.toFixed(1)}
                       </td>
                       
@@ -1076,7 +1105,31 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
               <div>
                 <h2 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Award style={{ color: 'var(--accent-primary)' }} size={22} />
-                  {getMetricTitle(activeMetric)} over Time
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '1.1rem' }}>
+                    {getMetricTitle(activeMetric)} over Time
+                  </span>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--panel-border)', padding: '2px 4px', borderRadius: '6px' }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', padding: '0 4px' }}>Period:</span>
+                      <select 
+                        value={modalAnalysisPeriod}
+                        onChange={(e) => setModalAnalysisPeriod(e.target.value)}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '0.75rem', outline: 'none', cursor: 'pointer' }}
+                      >
+                        {['1Y', '3Y', '5Y', '10Y'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--panel-border)', padding: '2px 4px', borderRadius: '6px' }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', padding: '0 4px' }}>Window:</span>
+                      <select 
+                        value={modalRollingWindow}
+                        onChange={(e) => setModalRollingWindow(e.target.value)}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '0.75rem', outline: 'none', cursor: 'pointer' }}
+                      >
+                        {['1M', '3M', '6M', '1Y', '3Y'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    </div>
+                  </div>
                 </h2>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '12px', flexWrap: 'wrap' }}>
                   <div style={{ position: 'relative' }} ref={metricDropdownRef}>
@@ -1211,9 +1264,7 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
                     </button>
                   )}
 
-                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                    ({analysisPeriod} Analysis, {rollingWindow} Rolling Window)
-                  </span>
+
                 </div>
 
                 {/* Selected Active Fund Badges */}
@@ -1323,8 +1374,47 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Computing rolling drawdowns...</p>
                 </div>
               ) : Object.keys(metricHistoryData).length === 0 ? (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: '300px', color: 'var(--text-secondary)' }}>
-                  No rolling data available for the selected period.
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: '300px', color: 'var(--text-secondary)', gap: '16px' }}>
+                  <p>No rolling data available for the selected period.</p>
+                  {isMetricFullView && (
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <button 
+                        onClick={() => setIsMetricFullView(false)}
+                        style={{
+                          padding: '8px 16px',
+                          background: 'var(--panel-border)',
+                          color: 'var(--text-primary)',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                      >
+                        <Minimize2 size={16} /> Exit Full View
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setIsMetricFullView(false);
+                          setSelectedMetricFunds([]);
+                        }}
+                        style={{
+                          padding: '8px 16px',
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          color: '#ef4444',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                      >
+                        <X size={16} /> Close Modal
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>
@@ -1388,9 +1478,9 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(3, 110px) 36px', gap: '16px', padding: '0 16px', color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 600 }}>
                         <div>Fund</div>
-                        <div style={{ textAlign: 'right' }}>Latest UI</div>
-                        <div style={{ textAlign: 'right' }}>Average UI</div>
-                        <div style={{ textAlign: 'right' }}>Max UI</div>
+                        <div style={{ textAlign: 'right' }}>Latest {activeMetric === 'overallRank' ? 'Rank' : (activeMetric === 'mddScore' || activeMetric === 'ulcerScore' ? 'Score' : 'Return')}</div>
+                        <div style={{ textAlign: 'right' }}>Avg {activeMetric === 'overallRank' ? 'Rank' : (activeMetric === 'mddScore' || activeMetric === 'ulcerScore' ? 'Score' : 'Return')}</div>
+                        <div style={{ textAlign: 'right' }}>{activeMetric === 'overallRank' ? 'Best Rank' : 'Max'}</div>
                         <div></div>
                       </div>
                       {selectedMetricFunds.map((fund, idx) => {
@@ -1411,13 +1501,13 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
                               <span>{fund.schemeName}</span>
                             </div>
                             <div style={{ fontSize: '1.05rem', fontWeight: 700, textAlign: 'right', color: 'var(--text-primary)' }}>
-                              {stats.latest.toFixed(2)}
+                              {activeMetric === 'overallRank' ? Math.round(stats.latest) : stats.latest.toFixed(2)}
                             </div>
                             <div style={{ fontSize: '1.05rem', fontWeight: 700, textAlign: 'right', color: 'var(--text-primary)' }}>
-                              {stats.average.toFixed(2)}
+                              {activeMetric === 'overallRank' ? Math.round(stats.average) : stats.average.toFixed(2)}
                             </div>
-                            <div style={{ fontSize: '1.05rem', fontWeight: 700, textAlign: 'right', color: 'var(--danger)' }}>
-                              {stats.max.toFixed(2)}
+                            <div style={{ fontSize: '1.05rem', fontWeight: 700, textAlign: 'right', color: activeMetric === 'overallRank' ? 'var(--success)' : 'var(--danger)' }}>
+                              {activeMetric === 'overallRank' ? Math.round(stats.max) : stats.max.toFixed(2)}
                             </div>
                             <div>
                               {selectedMetricFunds.length > 1 && (

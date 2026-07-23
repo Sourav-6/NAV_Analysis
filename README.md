@@ -1,16 +1,59 @@
-# React + Vite
+# NAV Analysis (Mutual Fund Performance Tracker)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A full-stack web application designed to track, rank, and analyze the historical performance of Mutual Funds. This tool calculates advanced financial metrics over rolling windows to help investors make data-driven decisions.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Comprehensive Dashboard**: View NAV history, rankings, and deep financial metrics.
+- **Advanced Metrics**: Calculates Sortino Ratio, Maximum Drawdown, Ulcer Index, and proprietary SRP Category Rankings over dynamic rolling windows (e.g., 1-year window over a 5-year analysis period).
+- **Interactive Time-Series Charts**: Click on any metric to view its daily historical movement plotted on interactive line charts.
+- **Fund Comparison**: Select up to 4 funds and view side-by-side performance overlays.
+- **Real-Time Data Engine**: Powered by an efficient backend that calculates massive time-series arrays and caches them in SQLite.
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+**Frontend:**
+- React (Vite)
+- Lightweight Charts (by TradingView) for fast, interactive time-series plotting
+- CSS Modules & Vanilla CSS with a responsive, modern "glassmorphism" UI
 
-## Expanding the Oxlint configuration
+**Backend:**
+- Node.js (Express)
+- SQLite (better-sqlite3) for fast local data persistence
+- Custom expanding-window metric calculation engine
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Getting Started
+
+### Prerequisites
+- Node.js installed on your machine
+- Git
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Sourav-6/NAV_Analysis.git
+   ```
+2. Navigate into the project folder:
+   ```bash
+   cd NAV_Analysis
+   ```
+3. Install dependencies for both frontend and backend:
+   ```bash
+   npm run install:all
+   ```
+
+### Running the App Locally
+
+To start both the Node.js backend server and the React frontend development server concurrently, run:
+
+```bash
+npm run dev:full
+```
+
+- The frontend will be accessible at `http://localhost:5173`
+- The backend API runs on `http://localhost:3001`
+
+## Project Structure
+- `/frontend` - Contains the React application, UI components, and API utilities.
+- `/backend` - Contains the Express server, SQLite database schema, data fetching scripts, and the ranking calculation engine.

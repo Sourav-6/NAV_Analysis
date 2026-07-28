@@ -3,8 +3,8 @@ import MultiSelect from './components/MultiSelect';
 import ComparisonDashboard from './components/ComparisonDashboard';
 import CategoryView from './components/CategoryView';
 import RankingDashboard from './components/RankingDashboard';
-import { Moon, Sun, RefreshCw, BarChart2, Award } from 'lucide-react';
-import { getDataStatus } from './utils/api';
+import { Moon, Sun, RefreshCw, BarChart2, Award, Bell } from 'lucide-react';
+import { getDataStatus, getNotifications, markNotificationsRead } from './utils/api';
 import './index.css';
 
 function App() {
@@ -18,9 +18,12 @@ function App() {
     if (saved) return saved;
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
-  const [plan, setPlan] = useState('direct');
+  const [plan, setPlan] = useState('regular');
   const [isUpdating, setIsUpdating] = useState(false);
   const [referenceDate, setReferenceDate] = useState('');
+  
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -28,12 +31,24 @@ function App() {
   }, [theme]);
 
 
+  const loadNotifications = async () => {
+    const notifs = await getNotifications();
+    setNotifications(notifs);
+  };
+
   useEffect(() => {
     getDataStatus().then(status => {
       setDataStatus(status);
       if (status?.isUpdating) setIsUpdating(true);
     });
+    loadNotifications();
   }, []);
+
+  const handleMarkRead = async () => {
+    await markNotificationsRead();
+    loadNotifications();
+    setShowNotifications(false);
+  };
 
   const handleUpdateData = async () => {
     if (isUpdating) return;
@@ -145,6 +160,117 @@ function App() {
                 cursor: 'pointer'
               }}
             />
+            <div style={{ position: 'relative' }}>
+              <button 
+                className="flex items-center justify-center"
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  background: 'var(--panel-bg)',
+                  border: '1px solid var(--panel-border)',
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer',
+                  padding: 0,
+                  transition: 'all 0.15s ease'
+                }}
+                onClick={() => setShowNotifications(!showNotifications)}
+                title="Notifications"
+              >
+                <Bell size={18} />
+                {notifications.some(n => !n.read) && (
+                  <span style={{
+                    position: 'absolute',
+                    top: '-2px',
+                    right: '-2px',
+                    background: 'var(--danger)',
+                    width: '10px',
+                    height: '10px',
+                    borderRadius: '50%',
+                    border: '2px solid var(--bg-primary)'
+                  }} />
+                )}
+              </button>
+              
+              {showNotifications && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: '0',
+                  marginTop: '8px',
+                  width: '320px',
+                  background: 'var(--panel-bg)',
+                  border: '1px solid var(--panel-border)',
+                  borderRadius: '12px',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+                  zIndex: 100,
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px'
+                }}>
+                  <div className="flex justify-between items-center" style={{ borderBottom: '1px solid var(--panel-border)', paddingBottom: '8px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1rem' }}>Notifications</h3>
+                    {notifications.some(n => !n.read) && (
+                      <button 
+                        onClick={handleMarkRead}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--accent-primary)',
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                          fontWeight: 500
+                        }}
+                      >
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ maxHeight: '300px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {notifications.length === 0 ? (
+                      <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', textAlign: 'center', padding: '20px 0' }}>
+                        No notifications
+                      </div>
+                    ) : (
+                      [...notifications].reverse().map(n => (
+                        <div key={n.id} style={{
+                          padding: '12px',
+                          background: n.read ? 'transparent' : 'rgba(110, 86, 207, 0.05)',
+                          border: n.read ? '1px solid var(--panel-border)' : '1px solid var(--accent-primary)',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px'
+                        }}>
+                          <div className="flex justify-between items-start">
+                            <strong style={{ fontSize: '0.9rem', color: n.read ? 'var(--text-primary)' : 'var(--accent-primary)' }}>{n.title}</strong>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                              {new Date(n.date).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{n.message}</p>
+                          {n.funds && n.funds.length > 0 && (
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-primary)', marginTop: '4px' }}>
+                              <ul style={{ margin: 0, paddingLeft: '16px' }}>
+                                {n.funds.map((f, i) => (
+                                  <li key={i}>{f}</li>
+                                ))}
+                              </ul>
+                              {n.count > 10 && (
+                                <div style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
+                                  + {n.count - 10} more...
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

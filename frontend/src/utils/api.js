@@ -120,8 +120,9 @@ export const getSchemesByCategory = async (category, plan = 'direct') => { // 'L
     
     const planMatches = plan === 'direct' ? isDirect : (!isDirect || name.includes('regular'));
     
-    // Some sanity filters to remove edge cases
-    return matchesCategory && planMatches && isGrowth && !isIDCW && !isInstitutional;
+    // Rely entirely on the backend CSV filtering for sanity checks.
+    // We only filter by Category and Plan (Direct/Regular) on the UI level.
+    return matchesCategory && planMatches;
   });
 };
 
@@ -168,7 +169,9 @@ export const getSchemeNavData = async (schemeCode, referenceDate) => {
       const refTime = new Date(referenceDate).getTime();
       const filteredData = data.data.filter(entry => {
         const parts = entry.date.split('-');
-        const dateObj = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        const months = { 'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5, 'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11 };
+        const month = isNaN(parseInt(parts[1])) ? months[parts[1]] : parseInt(parts[1]) - 1;
+        const dateObj = new Date(parseInt(parts[2]), month, parseInt(parts[0]));
         return dateObj.getTime() <= refTime;
       });
       data.data = filteredData;

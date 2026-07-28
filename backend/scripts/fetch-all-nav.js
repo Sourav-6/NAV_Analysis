@@ -26,6 +26,8 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(PROJECT_ROOT, 'data');
 const DB_PATH = path.join(DATA_DIR, 'database.sqlite');
 const PROGRESS_FILE = path.join(DATA_DIR, '.progress.json');
+const INWARD_CSV = path.join(DATA_DIR, 'inward.csv');
+const CONFIRMED_CSV = path.join(DATA_DIR, 'confirmed.csv');
 
 let db;
 
@@ -147,13 +149,187 @@ function fetchUrl(url, retries = MAX_RETRIES) {
 
 // ── AMFI Data Parsing ────────────────────────────────────────────────────────
 
+// ── CSV Management ─────────────────────────────────────────────────────────────
+
+function loadInwardList() {
+  const map = new Map();
+  if (!fs.existsSync(INWARD_CSV)) return map;
+  const content = fs.readFileSync(INWARD_CSV, 'utf-8');
+  const lines = content.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length <= 1) return map;
+  
+  const headers = lines[0].split(',').map(h => h.trim());
+  
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    const values = [];
+    let inQuotes = false;
+    let currentValue = '';
+    for (let char of line) {
+      if (char === '"') inQuotes = !inQuotes;
+      else if (char === ',' && !inQuotes) { values.push(currentValue); currentValue = ''; }
+      else currentValue += char;
+    }
+    values.push(currentValue);
+    
+    const obj = {};
+    headers.forEach((h, idx) => {
+      let val = values[idx] || '';
+      if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
+      obj[h] = val.trim();
+    });
+    if (obj['Scheme Code']) {
+      map.set(obj['Scheme Code'], obj);
+    }
+  }
+  return map;
+}
+
+function saveCSVLists(allDiscoveredSchemes) {
+  const inwardList = loadInwardList();
+  
+  const newFundsAdded = [];
+
+  // Merge discovered schemes with inward list
+  for (const [code, scheme] of allDiscoveredSchemes) {
+    if (!inwardList.has(code)) {
+      inwardList.set(code, {
+        'Scheme Code': code,
+        'Scheme Name': scheme.schemeName,
+        'Scheme Category': scheme.schemeCategory,
+        'Classification': scheme.classification,
+        'Flag': scheme.autoFlag ? 'TRUE' : 'FALSE',
+        'Commission': 'OFF'
+      });
+      newFundsAdded.push(scheme);
+    }
+  }
+  
+  const headers = ['Scheme Code', 'Scheme Name', 'Scheme Category', 'Classification', 'Flag', 'Commission'];
+  
+  const escape = (str) => {
+    if (str == null) return '';
+    const s = String(str);
+    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  };
+
+  const lines = [headers.join(',')];
+  const confirmedLines = [headers.join(',')];
+  
+  const sortedArr = Array.from(inwardList.values()).sort((a, b) => {
+    if (a['Scheme Category'] !== b['Scheme Category']) {
+       return String(a['Scheme Category']).localeCompare(String(b['Scheme Category']));
+    }
+    return String(a['Scheme Name']).localeCompare(String(b['Scheme Name']));
+  });
+
+  const confirmedSet = new Set();
+  
+  for (const obj of sortedArr) {
+    const row = headers.map(h => escape(obj[h])).join(',');
+    lines.push(row);
+    if (obj['Flag'] === 'TRUE' || obj['Flag'] === 'Y' || obj['Flag'] === '1' || obj['Flag'] === 'true') {
+      confirmedLines.push(row);
+      confirmedSet.add(obj['Scheme Code']);
+    }
+  }
+  
+  fs.writeFileSync(INWARD_CSV, lines.join('\n'));
+  fs.writeFileSync(CONFIRMED_CSV, confirmedLines.join('\n'));
+  
+  if (newFundsAdded.length > 0) {
+    const NOTIFICATIONS_FILE = path.join(DATA_DIR, 'notifications.json');
+    let notifications = [];
+    if (fs.existsSync(NOTIFICATIONS_FILE)) {
+      try {
+        notifications = JSON.parse(fs.readFileSync(NOTIFICATIONS_FILE, 'utf-8'));
+      } catch (e) {}
+    }
+    
+    notifications.push({
+      id: Date.now().toString(),
+      title: 'New Funds Discovered',
+      message: `Discovered ${newFundsAdded.length} new fund(s) in the market.`,
+      count: newFundsAdded.length,
+      funds: newFundsAdded.slice(0, 10).map(f => f.schemeName),
+      date: new Date().toISOString(),
+      read: false
+    });
+    
+    // Keep only last 50 notifications
+    if (notifications.length > 50) notifications = notifications.slice(notifications.length - 50);
+    
+    fs.writeFileSync(NOTIFICATIONS_FILE, JSON.stringify(notifications, null, 2));
+  }
+  
+  return confirmedSet;
+}
+
+async function preSyncCSV() {
+  console.log('🔄 Syncing scheme list from AMFI (Generating inward.csv/confirmed.csv)...');
+  const d = new Date();
+  d.setDate(d.getDate() - 3); // 3 days ago to be safe
+  const dateStr = formatDateForAMFI(d);
+  const url = `${AMFI_BASE_URL}?tp=1&frmdt=${dateStr}&todt=${dateStr}`;
+  const rawData = await fetchUrl(url);
+  
+  const allDiscoveredSchemes = new Map();
+  const lines = rawData.split('\n');
+  let currentCategory = 'Unknown';
+  
+  for (const line of lines) {
+    const trimmed = line.trim().replace(/\r$/, '');
+    if (!trimmed) continue;
+    if (trimmed.startsWith('Scheme Code;')) continue;
+    if (trimmed.startsWith('Open Ended') || trimmed.startsWith('Close Ended') || trimmed.startsWith('Interval')) {
+      currentCategory = trimmed;
+      continue;
+    }
+    if (!trimmed.includes(';')) continue;
+
+    const parts = trimmed.split(';');
+    if (parts.length < 8) continue;
+
+    const schemeCode = parts[0].trim();
+    const schemeName = parts[1].trim();
+    
+    if (!schemeCode || isNaN(parseInt(schemeCode))) continue;
+
+    const nameLower = schemeName.toLowerCase();
+    const isDirect = nameLower.includes('direct');
+    const isInstitutional = nameLower.includes('institutional') || nameLower.includes('inst');
+    const classification = isDirect ? 'Direct' : (isInstitutional ? 'Institutional' : 'Regular');
+    
+    const isGrowth = nameLower.includes('growth');
+    const isIDCW = nameLower.includes('idcw') || nameLower.includes('dividend');
+    const passesAutoCheck = isGrowth && !isIDCW && !isInstitutional;
+    
+    allDiscoveredSchemes.set(schemeCode, {
+      schemeCode,
+      schemeName,
+      schemeCategory: currentCategory,
+      classification,
+      autoFlag: passesAutoCheck
+    });
+  }
+  
+  const confirmedSet = saveCSVLists(allDiscoveredSchemes);
+  console.log(`✅ CSV Sync complete. Found ${allDiscoveredSchemes.size} total schemes, ${confirmedSet.size} confirmed.`);
+  return confirmedSet;
+}
+
+// ── AMFI Data Parsing ────────────────────────────────────────────────────────
+
 /**
  * Parses the semicolon-delimited text from AMFI's bulk endpoint.
  * Format: Scheme Code;Scheme Name;ISIN Div Payout/ISIN Growth;ISIN Div Reinvestment;Net Asset Value;Repurchase Price;Sale Price;Date
  * 
  * Returns a Map<schemeCode, { schemeName, isin, navEntries: [{date, nav}] }>
  */
-function parseAMFIData(rawText) {
+function parseAMFIData(rawText, confirmedSet) {
   const lines = rawText.split('\n');
   const schemeMap = new Map();
   let parsedCount = 0;
@@ -187,16 +363,15 @@ function parseAMFIData(rawText) {
 
     // Validate
     if (!schemeCode || isNaN(parseInt(schemeCode))) { skippedCount++; continue; }
+    
+    // Only process funds that are in the confirmed list
+    if (!confirmedSet.has(schemeCode)) { skippedCount++; continue; }
+    
     if (!navStr || navStr === 'N.A.' || navStr === '-') { skippedCount++; continue; }
     if (!dateStr) { skippedCount++; continue; }
 
     const nav = parseFloat(navStr);
     if (isNaN(nav)) { skippedCount++; continue; }
-
-    const nameLower = schemeName.toLowerCase();
-    const isGrowth = nameLower.includes('growth');
-    const isIDCW = nameLower.includes('idcw') || nameLower.includes('dividend');
-    if (!isGrowth || isIDCW) { skippedCount++; continue; }
 
     if (!schemeMap.has(schemeCode)) {
       schemeMap.set(schemeCode, {
@@ -332,6 +507,7 @@ async function main() {
   console.log('');
 
   ensureDirs();
+  const confirmedSet = await preSyncCSV();
 
   // Determine date range
   const endDate = new Date(); // Fetch up to today to get the most recent data (if published)
@@ -413,7 +589,7 @@ async function main() {
       const url = `${AMFI_BASE_URL}?tp=1&frmdt=${formatDateForAMFI(chunk.from)}&todt=${formatDateForAMFI(chunk.to)}`;
       const rawData = await fetchUrl(url);
       
-      const { schemeMap, parsedCount, skippedCount } = parseAMFIData(rawData);
+      const { schemeMap, parsedCount, skippedCount } = parseAMFIData(rawData, confirmedSet);
       totalDataPoints += parsedCount;
 
       // Merge into global map

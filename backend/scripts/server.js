@@ -199,6 +199,45 @@ app.post('/api/data/update', (req, res) => {
   res.json({ status: 'started' });
 });
 
+// ── Notifications API ────────────────────────────────────────────────────────
+const NOTIFICATIONS_FILE = path.join(DATA_DIR, 'notifications.json');
+
+app.get('/api/notifications', (req, res) => {
+  try {
+    if (!fs.existsSync(NOTIFICATIONS_FILE)) {
+      return res.json([]);
+    }
+    const data = JSON.parse(fs.readFileSync(NOTIFICATIONS_FILE, 'utf-8'));
+    res.json(data);
+  } catch (error) {
+    console.error('Error reading notifications:', error);
+    res.status(500).json({ error: 'Failed to read notifications' });
+  }
+});
+
+app.post('/api/notifications/read', (req, res) => {
+  try {
+    if (!fs.existsSync(NOTIFICATIONS_FILE)) {
+      return res.json({ success: true });
+    }
+    let data = JSON.parse(fs.readFileSync(NOTIFICATIONS_FILE, 'utf-8'));
+    let modified = false;
+    data.forEach(n => {
+      if (!n.read) {
+        n.read = true;
+        modified = true;
+      }
+    });
+    if (modified) {
+      fs.writeFileSync(NOTIFICATIONS_FILE, JSON.stringify(data, null, 2));
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error marking notifications read:', error);
+    res.status(500).json({ error: 'Failed to mark notifications read' });
+  }
+});
+
 app.get('/api/schemes/category/:category', (req, res) => {
   if (!db) return res.json([]);
   

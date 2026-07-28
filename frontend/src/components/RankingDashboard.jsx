@@ -5,15 +5,19 @@ import { createChart, CrosshairMode, AreaSeries, LineSeries } from 'lightweight-
 
 const CATEGORY_GROUPS = [
   {
-    name: 'Equity',
-    options: ['Large Cap', 'Mid Cap', 'Small Cap', 'Large & Mid Cap', 'Flexi Cap', 'Multi Cap', 'ELSS', 'Focused Fund', 'Value Fund', 'Sectoral', 'SIF']
+    name: 'Diversified Equity',
+    options: ['Large Cap', 'Mid Cap', 'Small Cap', 'Large & Mid Cap', 'Flexi Cap', 'Multi Cap', 'ELSS', 'Focused Fund', 'Value Fund']
+  },
+  {
+    name: 'Sectoral & Speciality',
+    options: ['Sectoral', 'SIF']
   },
   {
     name: 'Debt / Fixed Income',
     options: ['Liquid Fund', 'Overnight Fund', 'Money Market Fund', 'Short Duration Fund', 'Corporate Bond Fund', 'Dynamic Bond', 'Gilt Fund']
   },
   {
-    name: 'Hybrid & Other',
+    name: 'Hybrid & Index',
     options: ['Dynamic Asset Allocation', 'Aggressive Hybrid Fund', 'Conservative Hybrid Fund', 'Multi Asset Allocation', 'Index Funds']
   }
 ];
@@ -634,6 +638,32 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
     }
   };
 
+  const toggleGroup = (group) => {
+    const groupOptions = group.options;
+    const allSelected = groupOptions.every(opt => categories.includes(opt));
+    if (allSelected) {
+      // Prevent totally empty
+      const next = categories.filter(c => !groupOptions.includes(c));
+      if (next.length > 0) setCategories(next);
+    } else {
+      setCategories(prev => {
+        const next = new Set(prev);
+        groupOptions.forEach(opt => next.add(opt));
+        return Array.from(next);
+      });
+    }
+  };
+
+  const toggleAllCategories = () => {
+    const allOptions = CATEGORY_GROUPS.flatMap(g => g.options);
+    const allSelected = allOptions.every(opt => categories.includes(opt));
+    if (allSelected) {
+      setCategories([allOptions[0]]); // prevent empty
+    } else {
+      setCategories(allOptions);
+    }
+  };
+
   // Helper for rendering percentile badges
   const getPercentileClass = (score) => {
     if (score >= 75) return 'q1';
@@ -691,29 +721,46 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '6px',
-                  maxHeight: '300px',
+                  maxHeight: '400px',
                   overflowY: 'auto',
-                  minWidth: '220px',
+                  minWidth: '240px',
                   boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
                 }}>
-                  {CATEGORY_GROUPS.map(group => (
-                    <div key={group.name} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', padding: '6px 4px 2px 4px', borderBottom: '1px solid var(--panel-border)' }}>
-                        {group.name}
-                      </div>
-                      {group.options.map(opt => (
-                        <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', color: 'var(--text-primary)', cursor: 'pointer', padding: '4px', whiteSpace: 'nowrap' }}>
+                  <button
+                    onClick={toggleAllCategories}
+                    style={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', padding: '6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}
+                  >
+                    {CATEGORY_GROUPS.flatMap(g => g.options).every(opt => categories.includes(opt)) ? 'Deselect All' : 'Select All'}
+                  </button>
+                  {CATEGORY_GROUPS.map(group => {
+                    const allSelected = group.options.every(opt => categories.includes(opt));
+                    const someSelected = group.options.some(opt => categories.includes(opt));
+                    return (
+                      <div key={group.name} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', padding: '6px 4px 2px 4px', borderBottom: '1px solid var(--panel-border)', cursor: 'pointer' }}>
                           <input 
                             type="checkbox" 
-                            checked={categories.includes(opt)} 
-                            onChange={() => toggleCategory(opt)} 
+                            checked={allSelected} 
+                            ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                            onChange={() => toggleGroup(group)} 
                             style={{ cursor: 'pointer' }}
                           />
-                          {opt}
+                          {group.name}
                         </label>
-                      ))}
-                    </div>
-                  ))}
+                        {group.options.map(opt => (
+                          <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', color: 'var(--text-primary)', cursor: 'pointer', padding: '4px 4px 4px 20px', whiteSpace: 'nowrap' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={categories.includes(opt)} 
+                              onChange={() => toggleCategory(opt)} 
+                              style={{ cursor: 'pointer' }}
+                            />
+                            {opt}
+                          </label>
+                        ))}
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -929,7 +976,11 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
         </div>
       ) : rankedFunds.length === 0 ? (
         <div className="glass-panel text-center" style={{ padding: '40px 0', color: 'var(--text-secondary)' }}>
-          No funds in this category have complete historical NAV data covering the selected {analysisPeriod} Analysis Period.
+          <p>No funds in this category have complete historical NAV data covering the selected {analysisPeriod} Analysis Period.</p>
+          <p style={{ fontSize: '0.85rem', marginTop: '12px', opacity: 0.8 }}>
+            <strong>Tip:</strong> When selecting multiple categories, the analysis period is anchored to the most recent date across <em>all</em> selected funds.<br/>
+            Funds with short histories (e.g., recently launched) or stale histories (e.g., data stops early) will be excluded because they do not cover the full overlapping period.
+          </p>
         </div>
       ) : (
         <div className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>

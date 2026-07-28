@@ -4,13 +4,16 @@ import { getSchemesByCategory, getSchemeNavData } from '../utils/api';
 import { calculateAllReturns, assignQuartilesByColumn } from '../utils/returns';
 
 const CATEGORY_GROUPS = {
-  'Equity': [
-    'Large Cap', 'Mid Cap', 'Small Cap', 'Large & Mid Cap', 'Flexi Cap', 'Multi Cap', 'ELSS', 'Focused Fund', 'Value Fund', 'SIF'
+  'Diversified Equity': [
+    'Large Cap', 'Mid Cap', 'Small Cap', 'Large & Mid Cap', 'Flexi Cap', 'Multi Cap', 'ELSS', 'Focused Fund', 'Value Fund'
+  ],
+  'Sectoral & Speciality': [
+    'Sectoral', 'SIF'
   ],
   'Debt / Fixed Income': [
     'Liquid Fund', 'Overnight Fund', 'Money Market Fund', 'Short Duration Fund', 'Corporate Bond Fund', 'Dynamic Bond', 'Gilt Fund'
   ],
-  'Hybrid & Other': [
+  'Hybrid & Index': [
     'Dynamic Asset Allocation', 'Aggressive Hybrid Fund', 'Conservative Hybrid Fund', 'Multi Asset Allocation', 'Index Funds'
   ]
 };
@@ -20,7 +23,7 @@ const PERIOD_LABELS = {
 };
 
 const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
-  const [activeTabs, setActiveTabs] = useState([CATEGORY_GROUPS['Equity'][0]]);
+  const [activeTabs, setActiveTabs] = useState([CATEGORY_GROUPS['Diversified Equity'][0]]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const [tableData, setTableData] = useState([]);
@@ -119,8 +122,15 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
               return parseInt(b) - parseInt(a);
            });
            
-           // Averages are removed as requested
-           setDynamicPeriods([...order.filter(o => keys.includes(o)), ...calendar]);
+           const finalPeriods = [...order.filter(o => keys.includes(o)), ...calendar];
+           setDynamicPeriods(finalPeriods);
+           
+           setSortConfig(currentSort => {
+             if (currentSort.key !== 'schemeName' && !finalPeriods.includes(currentSort.key)) {
+               return { key: finalPeriods[0] || 'schemeName', direction: 'desc' };
+             }
+             return currentSort;
+           });
         }
         
         setTableData(processedData);
@@ -159,6 +169,30 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
     return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
   });
 
+  const toggleGroup = (groupOptions) => {
+    const allSelected = groupOptions.every(opt => activeTabs.includes(opt));
+    if (allSelected) {
+      const next = activeTabs.filter(c => !groupOptions.includes(c));
+      if (next.length > 0) setActiveTabs(next);
+    } else {
+      setActiveTabs(prev => {
+        const next = new Set(prev);
+        groupOptions.forEach(opt => next.add(opt));
+        return Array.from(next);
+      });
+    }
+  };
+
+  const toggleAllCategories = () => {
+    const allOptions = Object.values(CATEGORY_GROUPS).flat();
+    const allSelected = allOptions.every(opt => activeTabs.includes(opt));
+    if (allSelected) {
+      setActiveTabs([allOptions[0]]);
+    } else {
+      setActiveTabs(allOptions);
+    }
+  };
+
   return (
     <div className="category-view" style={{ width: '100%', maxWidth: '1200px', margin: '0 auto' }}>
       
@@ -178,32 +212,53 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
           
           {isDropdownOpen && (
             <div className="multi-select-dropdown">
-              {Object.entries(CATEGORY_GROUPS).map(([groupName, categories]) => (
-                <div key={groupName}>
-                  <div className="multi-select-group">{groupName}</div>
-                  {categories.map(category => {
-                    const isSelected = activeTabs.includes(category);
-                    return (
-                      <div 
-                        key={category} 
-                        className={`multi-select-option ${isSelected ? 'selected' : ''}`}
-                        onClick={() => {
-                          if (isSelected) {
-                            setActiveTabs(prev => prev.filter(t => t !== category));
-                          } else {
-                            setActiveTabs(prev => [...prev, category]);
-                          }
-                        }}
-                      >
-                        <div className="multi-select-checkbox">
-                          {isSelected && <Check size={14} strokeWidth={3} />}
+              <button
+                onClick={toggleAllCategories}
+                style={{ width: '100%', background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', padding: '6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}
+              >
+                {Object.values(CATEGORY_GROUPS).flat().every(opt => activeTabs.includes(opt)) ? 'Deselect All' : 'Select All'}
+              </button>
+              {Object.entries(CATEGORY_GROUPS).map(([groupName, categories]) => {
+                const allSelected = categories.every(opt => activeTabs.includes(opt));
+                const someSelected = categories.some(opt => activeTabs.includes(opt));
+                return (
+                  <div key={groupName} style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', padding: '6px 4px 2px 4px', borderBottom: '1px solid var(--panel-border)', cursor: 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={allSelected} 
+                        ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                        onChange={() => toggleGroup(categories)} 
+                        style={{ cursor: 'pointer' }}
+                      />
+                      {groupName}
+                    </label>
+                    {categories.map(category => {
+                      const isSelected = activeTabs.includes(category);
+                      return (
+                        <div 
+                          key={category} 
+                          className={`multi-select-option ${isSelected ? 'selected' : ''}`}
+                          onClick={() => {
+                            if (isSelected) {
+                              if (activeTabs.length > 1) {
+                                setActiveTabs(prev => prev.filter(t => t !== category));
+                              }
+                            } else {
+                              setActiveTabs(prev => [...prev, category]);
+                            }
+                          }}
+                        >
+                          <div className="multi-select-checkbox">
+                            {isSelected && <Check size={14} strokeWidth={3} />}
+                          </div>
+                          <span className="multi-select-label">{category}</span>
                         </div>
-                        <span className="multi-select-label">{category}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+                      );
+                    })}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

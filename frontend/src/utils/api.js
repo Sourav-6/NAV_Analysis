@@ -292,3 +292,27 @@ export const fetchHistoricalMetrics = async (params) => {
   }
 };
 
+/**
+ * Fetch new fund notifications
+ */
+export const getNotifications = async () => {
+  try {
+    const response = await fetch(`${LOCAL_API}/notifications`);
+    if (response.ok) return await response.json();
+    return [];
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    return [];
+  }
+};
+
+/**
+ * Mark notifications as read
+ */
+export const markNotificationsRead = async () => {
+  try {
+    await fetch(`${LOCAL_API}/notifications/read`, { method: 'POST' });
+  } catch (error) {
+    console.error('Error marking notifications read:', error);
+  }
+};

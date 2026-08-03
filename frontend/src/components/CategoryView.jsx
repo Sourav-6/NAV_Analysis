@@ -1,29 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, AlertCircle, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown, Check, ChevronDown } from 'lucide-react';
-import { getSchemesByCategory, getSchemeNavData } from '../utils/api';
+import { getSchemesByCategory, getSchemeNavData, getCategories } from '../utils/api';
 import { calculateAllReturns, assignQuartilesByColumn } from '../utils/returns';
 
-const CATEGORY_GROUPS = {
-  'Diversified Equity': [
-    'Large Cap', 'Mid Cap', 'Small Cap', 'Large & Mid Cap', 'Flexi Cap', 'Multi Cap', 'ELSS', 'Focused Fund', 'Value Fund'
-  ],
-  'Sectoral & Speciality': [
-    'Sectoral', 'SIF'
-  ],
-  'Debt / Fixed Income': [
-    'Liquid Fund', 'Overnight Fund', 'Money Market Fund', 'Short Duration Fund', 'Corporate Bond Fund', 'Dynamic Bond', 'Gilt Fund'
-  ],
-  'Hybrid & Index': [
-    'Dynamic Asset Allocation', 'Aggressive Hybrid Fund', 'Conservative Hybrid Fund', 'Multi Asset Allocation', 'Index Funds'
-  ]
-};
 const PERIOD_LABELS = {
   '1M': '1M', '3M': '3M', '6M': '6M', '1Y': '1Y', '3Y': '3Y', '5Y': '5Y', '10Y': '10Y', '15Y': '15Y',
   '1Y_AVG': '1Y Avg', '3Y_AVG': '3Y Avg', '5Y_AVG': '5Y Avg'
 };
 
+const formatReturn = (val) => {
+  if (val === undefined || val === null || val === -Infinity || isNaN(val)) return '-';
+  return `${val > 0 ? '+' : ''}${val.toFixed(2)}%`;
+};
+
 const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
-  const [activeTabs, setActiveTabs] = useState([CATEGORY_GROUPS['Diversified Equity'][0]]);
+  const [categoryGroups, setCategoryGroups] = useState({});
+  const [activeTabs, setActiveTabs] = useState([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const [tableData, setTableData] = useState([]);
@@ -42,13 +34,30 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
   };
 
   useEffect(() => {
+    let isMounted = true;
+    const fetchCategories = async () => {
+      const cats = await getCategories();
+      if (isMounted) {
+        setCategoryGroups(cats);
+        // Default to first subcategory of the first main category
+        const firstMain = Object.keys(cats)[0];
+        if (firstMain && cats[firstMain] && cats[firstMain].length > 0) {
+          setActiveTabs([cats[firstMain][0]]);
+        }
+      }
+    };
+    fetchCategories();
+
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      isMounted = false;
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   useEffect(() => {
@@ -148,26 +157,9 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
     return () => { isMounted = false; };
   }, [activeTabs, plan, referenceDate]);
 
-  const formatReturn = (val) => {
-    if (val === -Infinity || val === undefined || isNaN(val)) return '-';
-    return val.toFixed(1);
+  const toggleTab = (cat) => {
+    setActiveTabs(prev => prev.includes(cat) ? prev.filter(t => t !== cat) : [...prev, cat]);
   };
-
-  const sortedData = [...tableData].sort((a, b) => {
-    if (sortConfig.key === 'schemeName') {
-      return sortConfig.direction === 'asc' 
-        ? a.schemeName.localeCompare(b.schemeName)
-        : b.schemeName.localeCompare(a.schemeName);
-    }
-    const valA = a.returns[sortConfig.key];
-    const valB = b.returns[sortConfig.key];
-    const hasA = valA !== undefined && valA !== -Infinity && !isNaN(valA);
-    const hasB = valB !== undefined && valB !== -Infinity && !isNaN(valB);
-    if (!hasA && !hasB) return 0;
-    if (!hasA) return 1;
-    if (!hasB) return -1;
-    return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
-  });
 
   const toggleGroup = (groupOptions) => {
     const allSelected = groupOptions.every(opt => activeTabs.includes(opt));
@@ -184,7 +176,7 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
   };
 
   const toggleAllCategories = () => {
-    const allOptions = Object.values(CATEGORY_GROUPS).flat();
+    const allOptions = Object.values(categoryGroups).flat();
     const allSelected = allOptions.every(opt => activeTabs.includes(opt));
     if (allSelected) {
       setActiveTabs([allOptions[0]]);
@@ -192,6 +184,27 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
       setActiveTabs(allOptions);
     }
   };
+
+  const sortedData = [...tableData].sort((a, b) => {
+    if (sortConfig.key === 'schemeName') {
+      return sortConfig.direction === 'asc' 
+        ? a.schemeName.localeCompare(b.schemeName)
+        : b.schemeName.localeCompare(a.schemeName);
+    }
+    if (sortConfig.key === 'commission') {
+      const valA = parseFloat(a.commission) || 0;
+      const valB = parseFloat(b.commission) || 0;
+      return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+    }
+    const valA = a.returns[sortConfig.key];
+    const valB = b.returns[sortConfig.key];
+    const hasA = valA !== undefined && valA !== -Infinity && !isNaN(valA);
+    const hasB = valB !== undefined && valB !== -Infinity && !isNaN(valB);
+    if (!hasA && !hasB) return 0;
+    if (!hasA) return 1;
+    if (!hasB) return -1;
+    return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+  });
 
   return (
     <div className="category-view" style={{ width: '100%', maxWidth: '1200px', margin: '0 auto' }}>
@@ -216,9 +229,9 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
                 onClick={toggleAllCategories}
                 style={{ width: '100%', background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', padding: '6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}
               >
-                {Object.values(CATEGORY_GROUPS).flat().every(opt => activeTabs.includes(opt)) ? 'Deselect All' : 'Select All'}
+                {Object.values(categoryGroups).flat().every(opt => activeTabs.includes(opt)) ? 'Deselect All' : 'Select All'}
               </button>
-              {Object.entries(CATEGORY_GROUPS).map(([groupName, categories]) => {
+              {Object.entries(categoryGroups).map(([groupName, categories]) => {
                 const allSelected = categories.every(opt => activeTabs.includes(opt));
                 const someSelected = categories.some(opt => activeTabs.includes(opt));
                 return (
@@ -348,6 +361,22 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
                     </span>
                   </div>
                 </th>
+                <th 
+                  className={`sortable-header ${sortConfig.key === 'commission' ? 'active' : ''}`}
+                  style={{ background: 'var(--panel-bg)', minWidth: '70px', padding: '0 8px' }}
+                  onClick={() => handleSort('commission')}
+                >
+                  <div className="sortable-header-content">
+                    <span>Comm</span>
+                    <span className="sort-icon">
+                      {sortConfig.key === 'commission' ? (
+                        sortConfig.direction === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />
+                      ) : (
+                        <ArrowUpDown size={16} />
+                      )}
+                    </span>
+                  </div>
+                </th>
                 {dynamicPeriods.map(p => (
                   <th 
                     key={p} 
@@ -420,6 +449,17 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
                         <PlusCircle size={10} /> Add
                       </span>
                     </div>
+                  </td>
+                  <td 
+                    className="cell-value"
+                    style={{
+                      backgroundColor: 'var(--panel-bg)',
+                      color: 'var(--text-secondary)',
+                      fontSize: '0.8rem',
+                      fontWeight: 500
+                    }}
+                  >
+                    {scheme.commission && scheme.commission !== 'OFF' ? (scheme.commission.includes('%') ? scheme.commission : `${scheme.commission}%`) : '-'}
                   </td>
                   {dynamicPeriods.map(p => {
                     const val = scheme.returns[p];

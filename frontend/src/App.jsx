@@ -20,6 +20,7 @@ function App() {
   });
   const [plan, setPlan] = useState('regular');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [referenceDate, setReferenceDate] = useState('');
   
   const [notifications, setNotifications] = useState([]);
@@ -40,6 +41,7 @@ function App() {
     getDataStatus().then(status => {
       setDataStatus(status);
       if (status?.isUpdating) setIsUpdating(true);
+      if (status?.isSyncing) setIsSyncing(true);
     });
     loadNotifications();
   }, []);
@@ -51,7 +53,7 @@ function App() {
   };
 
   const handleUpdateData = async () => {
-    if (isUpdating) return;
+    if (isUpdating || isSyncing) return;
     setIsUpdating(true);
     try {
       await fetch('http://localhost:3001/api/data/update', { method: 'POST' });
@@ -67,14 +69,38 @@ function App() {
             }
           }
         } catch (err) {
-          // If server disconnects (e.g. restarts or crashes), wait for it to come back up.
-          // We won't clear the interval because we want to keep checking until it reconnects.
           console.warn('Backend unavailable, retrying...');
         }
       }, 2000);
     } catch (e) {
       console.error(e);
       setIsUpdating(false);
+    }
+  };
+
+  const handleSyncData = async () => {
+    if (isUpdating || isSyncing) return;
+    setIsSyncing(true);
+    try {
+      await fetch('http://localhost:3001/api/data/sync', { method: 'POST' });
+      
+      const poll = setInterval(async () => {
+        try {
+          const res = await fetch('http://localhost:3001/api/status');
+          if (res.ok) {
+            const data = await res.json();
+            if (!data.isSyncing) {
+              clearInterval(poll);
+              window.location.reload();
+            }
+          }
+        } catch (err) {
+          console.warn('Backend unavailable, retrying...');
+        }
+      }, 2000);
+    } catch (e) {
+      console.error(e);
+      setIsSyncing(false);
     }
   };
 
@@ -114,18 +140,38 @@ function App() {
                 borderRadius: '8px',
                 background: 'var(--panel-bg)',
                 border: '1px solid var(--panel-border)',
-                color: isUpdating ? 'var(--text-secondary)' : 'var(--text-primary)',
-                cursor: isUpdating ? 'not-allowed' : 'pointer',
-                padding: '8px 16px',
-                fontSize: '0.85rem',
-                transition: 'all 0.15s ease'
-              }}
-              onClick={handleUpdateData}
-              disabled={isUpdating}
-            >
-              <RefreshCw size={16} style={{ animation: isUpdating ? 'spin 1s linear infinite' : 'none' }} />
-              {isUpdating ? 'Updating...' : 'Update Data'}
-            </button>
+              color: (isUpdating || isSyncing) ? 'var(--text-secondary)' : 'var(--text-primary)',
+              cursor: (isUpdating || isSyncing) ? 'not-allowed' : 'pointer',
+              padding: '8px 16px',
+              fontSize: '0.85rem',
+              transition: 'all 0.15s ease'
+            }}
+            onClick={handleUpdateData}
+            disabled={isUpdating || isSyncing}
+          >
+            <RefreshCw size={16} style={{ animation: isUpdating ? 'spin 1s linear infinite' : 'none' }} />
+            {isUpdating ? 'Updating...' : 'Update Data'}
+          </button>
+          
+          <button 
+            className="flex items-center gap-2"
+            style={{ 
+              borderRadius: '8px',
+              background: 'var(--accent-color)',
+              border: '1px solid var(--accent-hover)',
+              color: 'var(--text-on-accent)',
+              cursor: (isUpdating || isSyncing) ? 'not-allowed' : 'pointer',
+              padding: '8px 16px',
+              fontSize: '0.85rem',
+              transition: 'all 0.15s ease',
+              opacity: (isUpdating || isSyncing) ? 0.6 : 1
+            }}
+            onClick={handleSyncData}
+            disabled={isUpdating || isSyncing}
+          >
+            <RefreshCw size={16} style={{ animation: isSyncing ? 'spin 1s linear infinite' : 'none' }} />
+            {isSyncing ? 'Syncing...' : 'Sync NAVs'}
+          </button>
             <button 
               className="flex items-center justify-center"
               style={{

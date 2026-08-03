@@ -316,3 +316,16 @@ export const markNotificationsRead = async () => {
     console.error('Error marking notifications read:', error);
   }
 };
+
+export const getCategories = async () => {
+  try {
+    const isUp = await fetchLocalStatus();
+    if (isUp) {
+      const response = await fetch(`${LOCAL_API}/categories`);
+      if (response.ok) return await response.json();
+    }
+  } catch (e) {
+    console.error("Error fetching categories:", e);
+  }
+  return {};
+};

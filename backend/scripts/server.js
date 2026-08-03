@@ -84,6 +84,7 @@ function loadData() {
 }
 
 let isUpdating = false;
+let isSyncing = false;
 
 // ── API Endpoints ────────────────────────────────────────────────────────────
 
@@ -105,6 +106,7 @@ app.get('/api/status', (req, res) => {
     status: 'ok',
     source: 'sqlite',
     isUpdating,
+    isSyncing,
     metadata: {
       ...metadata,
       schemesInMemory: schemesCount,
@@ -155,38 +157,38 @@ app.get('/api/schemes/search', (req, res) => {
  * Returns schemes matching a category (e.g., "large cap", "mid cap")
  * Filters to Direct Growth plans only (matching existing frontend behavior)
  */
+const runNodeScript = (scriptName, args = []) => {
+  return new Promise((resolve, reject) => {
+    const scriptPath = path.join(PROJECT_ROOT, 'scripts', scriptName);
+    console.log(`[UPDATE] Spawning node ${scriptPath} ${args.join(' ')}`);
+    
+    const child = spawn(process.execPath, [scriptPath, ...args], { 
+      cwd: PROJECT_ROOT, 
+      stdio: 'pipe'
+    });
+    
+    let stderr = '';
+    child.stderr.on('data', d => stderr += d.toString());
+    child.stdout.on('data', d => console.log(`[UPDATE] ${d.toString().trim()}`));
+    
+    child.on('close', code => {
+      if (code !== 0) reject(new Error(`${scriptName} failed (exit ${code}): ${stderr}`));
+      else resolve();
+    });
+    child.on('error', reject);
+  });
+};
+
 app.post('/api/data/update', (req, res) => {
-  if (isUpdating) {
-    return res.status(400).json({ error: 'Update already in progress' });
+  if (isUpdating || isSyncing) {
+    return res.status(400).json({ error: 'Operation already in progress' });
   }
   isUpdating = true;
-  
-  const runNodeScript = (scriptName, args = []) => {
-    return new Promise((resolve, reject) => {
-      const scriptPath = path.join(PROJECT_ROOT, 'scripts', scriptName);
-      console.log(`[UPDATE] Spawning node ${scriptPath} ${args.join(' ')}`);
-      
-      const child = spawn(process.execPath, [scriptPath, ...args], { 
-        cwd: PROJECT_ROOT, 
-        stdio: 'pipe'
-      });
-      
-      let stderr = '';
-      child.stderr.on('data', d => stderr += d.toString());
-      child.stdout.on('data', d => console.log(`[UPDATE] ${d.toString().trim()}`));
-      
-      child.on('close', code => {
-        if (code !== 0) reject(new Error(`${scriptName} failed (exit ${code}): ${stderr}`));
-        else resolve();
-      });
-      child.on('error', reject);
-    });
-  };
 
   (async () => {
     try {
-      await runNodeScript('fetch-all-nav.js', ['--update']);
-      await runNodeScript('fetch-sif-nav.js', ['--update']);
+      await runNodeScript('fetch-all-nav.js', ['--update', '--csv-only']);
+      // We don't need to run fetch-sif-nav.js for CSV only
       console.log('Update finished successfully. Reloading memory...');
       loadData();
     } catch (error) {
@@ -199,42 +201,88 @@ app.post('/api/data/update', (req, res) => {
   res.json({ status: 'started' });
 });
 
+app.post('/api/data/sync', (req, res) => {
+  if (isUpdating || isSyncing) {
+    return res.status(400).json({ error: 'Operation already in progress' });
+  }
+  isSyncing = true;
+
+  (async () => {
+    try {
+      await runNodeScript('fetch-all-nav.js', ['--update', '--nav-only']);
+      await runNodeScript('fetch-sif-nav.js', ['--update']);
+      console.log('Sync finished successfully. Reloading memory...');
+      loadData();
+    } catch (error) {
+      console.error('Sync failed:', error);
+    } finally {
+      isSyncing = false;
+    }
+  })();
+  
+  res.json({ status: 'started' });
+});
+
 // ── Notifications API ────────────────────────────────────────────────────────
 const NOTIFICATIONS_FILE = path.join(DATA_DIR, 'notifications.json');
 
 app.get('/api/notifications', (req, res) => {
   try {
-    if (!fs.existsSync(NOTIFICATIONS_FILE)) {
+    const inwardPath = path.join(DATA_DIR, 'inward.csv');
+    if (!fs.existsSync(inwardPath)) {
       return res.json([]);
     }
-    const data = JSON.parse(fs.readFileSync(NOTIFICATIONS_FILE, 'utf-8'));
-    res.json(data);
+    
+    const content = fs.readFileSync(inwardPath, 'utf-8');
+    const lines = content.split(/\r?\n/).filter(l => l.trim());
+    
+    // Header is 1 line. If there are >1 lines, there are new funds
+    if (lines.length > 1) {
+      const fundCount = lines.length - 1;
+      return res.json([{
+        id: 'inward_alert',
+        title: 'New Funds Discovered',
+        message: `Discovered ${fundCount} new fund(s) waiting for review in inward.csv.`,
+        count: fundCount,
+        date: new Date().toISOString(),
+        read: false
+      }]);
+    } else {
+      return res.json([]);
+    }
   } catch (error) {
     console.error('Error reading notifications:', error);
     res.status(500).json({ error: 'Failed to read notifications' });
   }
 });
 
+// Since read status depends on inward.csv content, we don't need a true read/write for this endpoint anymore.
 app.post('/api/notifications/read', (req, res) => {
+  res.json({ success: true, message: 'Persistent notification requires manual update in inward.csv' });
+});
+
+// ── Categories API ───────────────────────────────────────────────────────────
+app.get('/api/categories', (req, res) => {
+  if (!db) return res.json({});
+  
   try {
-    if (!fs.existsSync(NOTIFICATIONS_FILE)) {
-      return res.json({ success: true });
-    }
-    let data = JSON.parse(fs.readFileSync(NOTIFICATIONS_FILE, 'utf-8'));
-    let modified = false;
-    data.forEach(n => {
-      if (!n.read) {
-        n.read = true;
-        modified = true;
+    // Select distinct combinations of mainCategory and subCategory
+    const rows = db.prepare("SELECT DISTINCT mainCategory, subCategory FROM schemes WHERE mainCategory IS NOT NULL AND mainCategory != '' ORDER BY mainCategory, subCategory").all();
+    
+    const groups = {};
+    for (const row of rows) {
+      if (!groups[row.mainCategory]) {
+        groups[row.mainCategory] = [];
       }
-    });
-    if (modified) {
-      fs.writeFileSync(NOTIFICATIONS_FILE, JSON.stringify(data, null, 2));
+      if (row.subCategory && row.subCategory !== '') {
+        groups[row.mainCategory].push(row.subCategory);
+      }
     }
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error marking notifications read:', error);
-    res.status(500).json({ error: 'Failed to mark notifications read' });
+    
+    res.json(groups);
+  } catch(e) {
+    console.error('Error fetching categories:', e);
+    res.status(500).json({ error: 'Failed to fetch categories' });
   }
 });
 
@@ -245,7 +293,7 @@ app.get('/api/schemes/category/:category', (req, res) => {
   const plan = (req.query.plan || 'direct').toLowerCase();
   const keywords = category.split(/\s+/);
 
-  let sql = "SELECT schemeCode, schemeName FROM schemes WHERE LOWER(schemeName) LIKE '%growth%' AND LOWER(schemeName) NOT LIKE '%idcw%' AND LOWER(schemeName) NOT LIKE '%dividend%' AND LOWER(schemeName) NOT LIKE '%institutional%'";
+  let sql = "SELECT schemeCode, schemeName, commission FROM schemes WHERE LOWER(schemeName) LIKE '%growth%' AND LOWER(schemeName) NOT LIKE '%idcw%' AND LOWER(schemeName) NOT LIKE '%dividend%' AND LOWER(schemeName) NOT LIKE '%institutional%'";
   
   if (plan === 'direct') {
     sql += " AND LOWER(schemeName) LIKE '%direct%'";
@@ -257,13 +305,14 @@ app.get('/api/schemes/category/:category', (req, res) => {
   if (category === 'sif') {
     sql += " AND LOWER(schemeCategory) LIKE '%specialized investment fund%'";
   } else if (category === 'large cap') {
-    sql += " AND LOWER(schemeCategory) LIKE '%large%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%mid%'";
+    sql += " AND (LOWER(subCategory) = 'large cap' OR (LOWER(schemeCategory) LIKE '%large%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%mid%'))";
   } else if (category === 'mid cap') {
-    sql += " AND LOWER(schemeCategory) LIKE '%mid%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%large%'";
+    sql += " AND (LOWER(subCategory) = 'mid cap' OR (LOWER(schemeCategory) LIKE '%mid%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%large%'))";
   } else {
-    for (const kw of keywords) {
-      sql += ` AND LOWER(schemeCategory) LIKE '%${kw.replace(/'/g, "''")}%'`;
-    }
+    // Check subCategory exact match OR schemeCategory fuzzy match
+    sql += ` AND (LOWER(subCategory) = '${category.replace(/'/g, "''")}' OR (`;
+    const keywordConditions = keywords.map(kw => `LOWER(schemeCategory) LIKE '%${kw.replace(/'/g, "''")}%'`).join(' AND ');
+    sql += `${keywordConditions}))`;
   }
 
   const results = db.prepare(sql).all();
@@ -884,7 +933,7 @@ app.post('/api/ranking/calculate', (req, res) => {
     const weights = resolveWeights(req.body.config);
 
     // Query schemes in this category & plan
-    let categorySql = "SELECT schemeCode, schemeName, schemeCategory FROM schemes WHERE LOWER(schemeName) LIKE '%growth%' AND LOWER(schemeName) NOT LIKE '%idcw%' AND LOWER(schemeName) NOT LIKE '%dividend%' AND LOWER(schemeName) NOT LIKE '%institutional%'";
+    let categorySql = "SELECT schemeCode, schemeName, schemeCategory, commission FROM schemes WHERE LOWER(schemeName) LIKE '%growth%' AND LOWER(schemeName) NOT LIKE '%idcw%' AND LOWER(schemeName) NOT LIKE '%dividend%' AND LOWER(schemeName) NOT LIKE '%institutional%'";
     
     if (plan === 'direct') {
       categorySql += " AND LOWER(schemeName) LIKE '%direct%'";
@@ -977,7 +1026,7 @@ app.post('/api/ranking/historical-metrics', (req, res) => {
     const weights = resolveWeights(req.body.config);
 
     // Query schemes in this category & plan (same as /api/ranking/calculate)
-    let categorySql = "SELECT schemeCode, schemeName, schemeCategory FROM schemes WHERE LOWER(schemeName) LIKE '%growth%' AND LOWER(schemeName) NOT LIKE '%idcw%' AND LOWER(schemeName) NOT LIKE '%dividend%' AND LOWER(schemeName) NOT LIKE '%institutional%'";
+    let categorySql = "SELECT schemeCode, schemeName, schemeCategory, commission FROM schemes WHERE LOWER(schemeName) LIKE '%growth%' AND LOWER(schemeName) NOT LIKE '%idcw%' AND LOWER(schemeName) NOT LIKE '%dividend%' AND LOWER(schemeName) NOT LIKE '%institutional%'";
     
     if (plan === 'direct') {
       categorySql += " AND LOWER(schemeName) LIKE '%direct%'";

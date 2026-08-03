@@ -1,26 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Loader2, AlertCircle, Settings, Save, PlusCircle, MinusCircle, Award, Check, X, Info, Search, Trash2, Maximize2, Minimize2 } from 'lucide-react';
-import { getRankingConfig, updateRankingConfig, calculateRankings, fetchHistoricalMetrics } from '../utils/api';
+import { getRankingConfig, updateRankingConfig, calculateRankings, fetchHistoricalMetrics, getCategories } from '../utils/api';
 import { createChart, CrosshairMode, AreaSeries, LineSeries } from 'lightweight-charts';
-
-const CATEGORY_GROUPS = [
-  {
-    name: 'Diversified Equity',
-    options: ['Large Cap', 'Mid Cap', 'Small Cap', 'Large & Mid Cap', 'Flexi Cap', 'Multi Cap', 'ELSS', 'Focused Fund', 'Value Fund']
-  },
-  {
-    name: 'Sectoral & Speciality',
-    options: ['Sectoral', 'SIF']
-  },
-  {
-    name: 'Debt / Fixed Income',
-    options: ['Liquid Fund', 'Overnight Fund', 'Money Market Fund', 'Short Duration Fund', 'Corporate Bond Fund', 'Dynamic Bond', 'Gilt Fund']
-  },
-  {
-    name: 'Hybrid & Index',
-    options: ['Dynamic Asset Allocation', 'Aggressive Hybrid Fund', 'Conservative Hybrid Fund', 'Multi Asset Allocation', 'Index Funds']
-  }
-];
 
 const PERIOD_OPTIONS = [
   { value: '1Y', label: '1 Year' },
@@ -47,7 +28,8 @@ const COLORS = [
 ];
 
 const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDate }) => {
-  const [categories, setCategories] = useState([CATEGORY_GROUPS[0].options[0]]);
+  const [categoryGroups, setCategoryGroups] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [analysisPeriod, setAnalysisPeriod] = useState('3Y');
   const [rollingWindow, setRollingWindow] = useState('1Y');
@@ -57,6 +39,23 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
   useEffect(() => {
     if (plan) setLocalPlan(plan);
   }, [plan]);
+
+  // Load dynamic categories
+  useEffect(() => {
+    let isMounted = true;
+    const fetchCategories = async () => {
+      const catsObj = await getCategories();
+      if (isMounted) {
+        const groupsArr = Object.entries(catsObj).map(([name, options]) => ({ name, options }));
+        setCategoryGroups(groupsArr);
+        if (categories.length === 0 && groupsArr.length > 0 && groupsArr[0].options.length > 0) {
+          setCategories([groupsArr[0].options[0]]);
+        }
+      }
+    };
+    fetchCategories();
+    return () => { isMounted = false; };
+  }, []);
   
   // Algorithm configuration (weights and risk-free rate)
   const [config, setConfig] = useState({
@@ -164,6 +163,8 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
   const requestIdRef = React.useRef(0);
 
   useEffect(() => {
+    if (categories.length === 0) return;
+    
     const currentRequestId = ++requestIdRef.current;
     setIsLoading(true);
     setError(null);
@@ -195,10 +196,18 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
     let sortableItems = [...rankedFunds];
     if (sortConfig.key) {
       sortableItems.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
+        let valA = a[sortConfig.key];
+        let valB = b[sortConfig.key];
+        
+        if (sortConfig.key === 'commission') {
+          valA = parseFloat(valA) || 0;
+          valB = parseFloat(valB) || 0;
+        }
+        
+        if (valA < valB) {
           return sortConfig.direction === 'asc' ? -1 : 1;
         }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
+        if (valA > valB) {
           return sortConfig.direction === 'asc' ? 1 : -1;
         }
         return 0;
@@ -655,7 +664,7 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
   };
 
   const toggleAllCategories = () => {
-    const allOptions = CATEGORY_GROUPS.flatMap(g => g.options);
+    const allOptions = categoryGroups.flatMap(g => g.options);
     const allSelected = allOptions.every(opt => categories.includes(opt));
     if (allSelected) {
       setCategories([allOptions[0]]); // prevent empty
@@ -730,9 +739,9 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
                     onClick={toggleAllCategories}
                     style={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', padding: '6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}
                   >
-                    {CATEGORY_GROUPS.flatMap(g => g.options).every(opt => categories.includes(opt)) ? 'Deselect All' : 'Select All'}
+                    {categoryGroups.flatMap(g => g.options).every(opt => categories.includes(opt)) ? 'Deselect All' : 'Select All'}
                   </button>
-                  {CATEGORY_GROUPS.map(group => {
+                  {categoryGroups.map(group => {
                     const allSelected = group.options.every(opt => categories.includes(opt));
                     const someSelected = group.options.some(opt => categories.includes(opt));
                     return (
@@ -999,6 +1008,7 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
                 <tr>
                   <th style={{ width: '60px', textAlign: 'center' }}>Rank</th>
                   <th style={{ textAlign: 'left', minWidth: '250px', cursor: 'pointer' }} onClick={() => requestSort('schemeName')}>Fund Name {sortConfig.key === 'schemeName' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                  <th style={{ width: '80px', textAlign: 'center', cursor: 'pointer' }} onClick={() => requestSort('commission')}>Commission {sortConfig.key === 'commission' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
                   <th style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => requestSort('analysisPeriodReturn')}>Period Return {sortConfig.key === 'analysisPeriodReturn' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
                   <th style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => requestSort('overallScore')}>Overall Score {sortConfig.key === 'overallScore' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
                   <th style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => requestSort('dailyLeadership')}>Daily Leadership {sortConfig.key === 'dailyLeadership' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
@@ -1027,6 +1037,9 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
                       </td>
                       <td className="scheme-name" style={{ textAlign: 'left', fontWeight: 500 }}>
                         {fund.schemeName}
+                      </td>
+                      <td style={{ textAlign: 'center', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                        {fund.commission && fund.commission !== 'OFF' ? (fund.commission.includes('%') ? fund.commission : `${fund.commission}%`) : '-'}
                       </td>
                       <td style={{ textAlign: 'center', fontWeight: 600, color: fund.analysisPeriodReturn >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                         {fund.analysisPeriodReturn?.toFixed(2)}%

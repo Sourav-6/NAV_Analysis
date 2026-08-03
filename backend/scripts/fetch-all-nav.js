@@ -48,7 +48,10 @@ function ensureDirs() {
         schemeCode INTEGER PRIMARY KEY,
         schemeName TEXT NOT NULL,
         isin TEXT,
-        schemeCategory TEXT
+        schemeCategory TEXT,
+        mainCategory TEXT,
+        subCategory TEXT,
+        commission TEXT
       );
       CREATE TABLE IF NOT EXISTS nav_history (
         schemeCode INTEGER,
@@ -151,10 +154,10 @@ function fetchUrl(url, retries = MAX_RETRIES) {
 
 // ── CSV Management ─────────────────────────────────────────────────────────────
 
-function loadInwardList() {
+function loadCSVMap(filepath) {
   const map = new Map();
-  if (!fs.existsSync(INWARD_CSV)) return map;
-  const content = fs.readFileSync(INWARD_CSV, 'utf-8');
+  if (!fs.existsSync(filepath)) return map;
+  const content = fs.readFileSync(filepath, 'utf-8');
   const lines = content.split(/\r?\n/).filter(l => l.trim());
   if (lines.length <= 1) return map;
   
@@ -186,26 +189,35 @@ function loadInwardList() {
 }
 
 function saveCSVLists(allDiscoveredSchemes) {
-  const inwardList = loadInwardList();
-  
-  const newFundsAdded = [];
+  const inwardMap = loadCSVMap(INWARD_CSV);
+  const confirmedMap = loadCSVMap(CONFIRMED_CSV);
 
-  // Merge discovered schemes with inward list
+  // 1. Check inwardMap for manually edited flags and move them to confirmedMap
+  for (const [code, obj] of inwardMap.entries()) {
+    const flag = obj['Flag']?.trim().toUpperCase() || '';
+    if (flag !== '') { // If Flag is manually set to anything (TRUE, FALSE, ON, OFF)
+      confirmedMap.set(code, obj);
+      inwardMap.delete(code);
+    }
+  }
+
+  // 2. Process newly discovered schemes
   for (const [code, scheme] of allDiscoveredSchemes) {
-    if (!inwardList.has(code)) {
-      inwardList.set(code, {
+    if (!confirmedMap.has(code) && !inwardMap.has(code)) {
+      inwardMap.set(code, {
         'Scheme Code': code,
         'Scheme Name': scheme.schemeName,
         'Scheme Category': scheme.schemeCategory,
         'Classification': scheme.classification,
-        'Flag': scheme.autoFlag ? 'TRUE' : 'FALSE',
+        'Main Category': '',
+        'Sub Category': '',
+        'Flag': '', // Explicitly empty for inward file
         'Commission': 'OFF'
       });
-      newFundsAdded.push(scheme);
     }
   }
   
-  const headers = ['Scheme Code', 'Scheme Name', 'Scheme Category', 'Classification', 'Flag', 'Commission'];
+  const headers = ['Scheme Code', 'Scheme Name', 'Scheme Category', 'Classification', 'Main Category', 'Sub Category', 'Flag', 'Commission'];
   
   const escape = (str) => {
     if (str == null) return '';
@@ -216,56 +228,34 @@ function saveCSVLists(allDiscoveredSchemes) {
     return s;
   };
 
-  const lines = [headers.join(',')];
-  const confirmedLines = [headers.join(',')];
-  
-  const sortedArr = Array.from(inwardList.values()).sort((a, b) => {
-    if (a['Scheme Category'] !== b['Scheme Category']) {
-       return String(a['Scheme Category']).localeCompare(String(b['Scheme Category']));
-    }
-    return String(a['Scheme Name']).localeCompare(String(b['Scheme Name']));
-  });
-
-  const confirmedSet = new Set();
-  
-  for (const obj of sortedArr) {
-    const row = headers.map(h => escape(obj[h])).join(',');
-    lines.push(row);
-    if (obj['Flag'] === 'TRUE' || obj['Flag'] === 'Y' || obj['Flag'] === '1' || obj['Flag'] === 'true') {
-      confirmedLines.push(row);
-      confirmedSet.add(obj['Scheme Code']);
-    }
-  }
-  
-  fs.writeFileSync(INWARD_CSV, lines.join('\n'));
-  fs.writeFileSync(CONFIRMED_CSV, confirmedLines.join('\n'));
-  
-  if (newFundsAdded.length > 0) {
-    const NOTIFICATIONS_FILE = path.join(DATA_DIR, 'notifications.json');
-    let notifications = [];
-    if (fs.existsSync(NOTIFICATIONS_FILE)) {
-      try {
-        notifications = JSON.parse(fs.readFileSync(NOTIFICATIONS_FILE, 'utf-8'));
-      } catch (e) {}
-    }
-    
-    notifications.push({
-      id: Date.now().toString(),
-      title: 'New Funds Discovered',
-      message: `Discovered ${newFundsAdded.length} new fund(s) in the market.`,
-      count: newFundsAdded.length,
-      funds: newFundsAdded.slice(0, 10).map(f => f.schemeName),
-      date: new Date().toISOString(),
-      read: false
+  const saveMapToCSV = (mapToSave, filepath) => {
+    const lines = [headers.join(',')];
+    const sortedArr = Array.from(mapToSave.values()).sort((a, b) => {
+      if (a['Scheme Category'] !== b['Scheme Category']) {
+         return String(a['Scheme Category']).localeCompare(String(b['Scheme Category']));
+      }
+      return String(a['Scheme Name']).localeCompare(String(b['Scheme Name']));
     });
     
-    // Keep only last 50 notifications
-    if (notifications.length > 50) notifications = notifications.slice(notifications.length - 50);
-    
-    fs.writeFileSync(NOTIFICATIONS_FILE, JSON.stringify(notifications, null, 2));
-  }
+    for (const obj of sortedArr) {
+      lines.push(headers.map(h => escape(obj[h])).join(','));
+    }
+    fs.writeFileSync(filepath, lines.join('\n'));
+  };
+
+  saveMapToCSV(inwardMap, INWARD_CSV);
+  saveMapToCSV(confirmedMap, CONFIRMED_CSV);
   
-  return confirmedSet;
+  // Return a map of ONLY the TRUE/ON flags from confirmedMap
+  const validConfirmedMap = new Map();
+  for (const [code, obj] of confirmedMap.entries()) {
+    const flag = obj['Flag']?.trim().toUpperCase() || '';
+    if (flag === 'TRUE' || flag === 'Y' || flag === '1' || flag === 'ON') {
+      validConfirmedMap.set(code, obj);
+    }
+  }
+
+  return validConfirmedMap;
 }
 
 async function preSyncCSV() {
@@ -316,9 +306,9 @@ async function preSyncCSV() {
     });
   }
   
-  const confirmedSet = saveCSVLists(allDiscoveredSchemes);
-  console.log(`✅ CSV Sync complete. Found ${allDiscoveredSchemes.size} total schemes, ${confirmedSet.size} confirmed.`);
-  return confirmedSet;
+  const confirmedMap = saveCSVLists(allDiscoveredSchemes);
+  console.log(`✅ CSV Sync complete. Found ${allDiscoveredSchemes.size} total schemes, ${confirmedMap.size} confirmed.`);
+  return confirmedMap;
 }
 
 // ── AMFI Data Parsing ────────────────────────────────────────────────────────
@@ -329,7 +319,7 @@ async function preSyncCSV() {
  * 
  * Returns a Map<schemeCode, { schemeName, isin, navEntries: [{date, nav}] }>
  */
-function parseAMFIData(rawText, confirmedSet) {
+function parseAMFIData(rawText, confirmedMap) {
   const lines = rawText.split('\n');
   const schemeMap = new Map();
   let parsedCount = 0;
@@ -364,8 +354,8 @@ function parseAMFIData(rawText, confirmedSet) {
     // Validate
     if (!schemeCode || isNaN(parseInt(schemeCode))) { skippedCount++; continue; }
     
-    // Only process funds that are in the confirmed list
-    if (!confirmedSet.has(schemeCode)) { skippedCount++; continue; }
+    // Only process funds that are in the confirmed map (TRUE/ON flag)
+    if (!confirmedMap.has(schemeCode)) { skippedCount++; continue; }
     
     if (!navStr || navStr === 'N.A.' || navStr === '-') { skippedCount++; continue; }
     if (!dateStr) { skippedCount++; continue; }
@@ -438,24 +428,30 @@ function clearProgress() {
 
 // ── Merge NAV data into existing scheme files ────────────────────────────────
 
-function mergeAndSaveSchemeData(schemeMap) {
+function mergeAndSaveSchemeData(schemeMap, confirmedMap) {
   let newSchemes = 0;
   let updatedSchemes = 0;
   
-  const insertScheme = db.prepare('INSERT OR IGNORE INTO schemes (schemeCode, schemeName, isin, schemeCategory) VALUES (?, ?, ?, ?)');
+  const insertScheme = db.prepare('INSERT OR IGNORE INTO schemes (schemeCode, schemeName, isin, schemeCategory, mainCategory, subCategory, commission) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  const updateScheme = db.prepare('UPDATE schemes SET mainCategory = ?, subCategory = ?, commission = ? WHERE schemeCode = ?');
   const insertNav = db.prepare('INSERT OR IGNORE INTO nav_history (schemeCode, date, nav) VALUES (?, ?, ?)');
   const checkSchemeExists = db.prepare('SELECT 1 FROM schemes WHERE schemeCode = ?');
   
   const insertMany = db.transaction((schemesData) => {
     for (const [schemeCode, data] of schemesData) {
       const parsedCode = parseInt(schemeCode);
+      const csvObj = confirmedMap.get(schemeCode);
+      const mainCategory = csvObj ? csvObj['Main Category'] || '' : '';
+      const subCategory = csvObj ? csvObj['Sub Category'] || '' : '';
+      const commission = csvObj ? csvObj['Commission'] || '' : '';
       
       const exists = checkSchemeExists.get(parsedCode);
-      if (!exists) {
-        insertScheme.run(parsedCode, data.schemeName, data.isin || '', data.schemeCategory || '');
-        newSchemes++;
-      } else {
+      if (exists) {
+        updateScheme.run(mainCategory, subCategory, commission, parsedCode);
         updatedSchemes++;
+      } else {
+        insertScheme.run(parsedCode, data.schemeName, data.isin || '', data.schemeCategory || '', mainCategory, subCategory, commission);
+        newSchemes++;
       }
       
       for (const entry of data.navEntries) {
@@ -497,6 +493,8 @@ function updateMasterSchemeList() {
 
 async function main() {
   const isUpdate = process.argv.includes('--update');
+  const isCsvOnly = process.argv.includes('--csv-only');
+  const isNavOnly = process.argv.includes('--nav-only');
   
   console.log('');
   console.log('╔══════════════════════════════════════════════════════════════╗');
@@ -507,7 +505,40 @@ async function main() {
   console.log('');
 
   ensureDirs();
-  const confirmedSet = await preSyncCSV();
+  let confirmedMap;
+  
+  if (!isNavOnly) {
+    confirmedMap = await preSyncCSV();
+  } else {
+    // If nav-only, we skip AMFI discovery and just load the existing confirmed.csv
+    console.log('⏭️ Skipping AMFI list discovery (--nav-only flag). Reading local confirmed.csv...');
+    confirmedMap = loadCSVMap(CONFIRMED_CSV);
+    console.log(`✅ Loaded ${confirmedMap.size} confirmed schemes from disk.`);
+  }
+
+  // Cleanup Database: Explicitly delete schemes (and their NAV data) that are NOT in the valid confirmed map
+  console.log('🧹 Cleaning up database: removing non-confirmed/false flag schemes...');
+  const activeCodes = Array.from(confirmedMap.keys()).map(c => parseInt(c)).join(',');
+  let deletedNav = 0;
+  let deletedSchemes = 0;
+  if (activeCodes.length > 0) {
+    const navRes = db.prepare(`DELETE FROM nav_history WHERE schemeCode NOT IN (${activeCodes})`).run();
+    const schemeRes = db.prepare(`DELETE FROM schemes WHERE schemeCode NOT IN (${activeCodes})`).run();
+    deletedNav = navRes.changes;
+    deletedSchemes = schemeRes.changes;
+  } else {
+    // If NO active codes, delete EVERYTHING
+    const navRes = db.prepare('DELETE FROM nav_history').run();
+    const schemeRes = db.prepare('DELETE FROM schemes').run();
+    deletedNav = navRes.changes;
+    deletedSchemes = schemeRes.changes;
+  }
+  console.log(`   Deleted ${deletedSchemes} schemes and ${deletedNav} NAV records.`);
+
+  if (isCsvOnly) {
+    console.log('\n✅ CSV Update only requested. Exiting without fetching NAV data.');
+    process.exit(0);
+  }
 
   // Determine date range
   const endDate = new Date(); // Fetch up to today to get the most recent data (if published)
@@ -589,7 +620,7 @@ async function main() {
       const url = `${AMFI_BASE_URL}?tp=1&frmdt=${formatDateForAMFI(chunk.from)}&todt=${formatDateForAMFI(chunk.to)}`;
       const rawData = await fetchUrl(url);
       
-      const { schemeMap, parsedCount, skippedCount } = parseAMFIData(rawData, confirmedSet);
+      const { schemeMap, parsedCount, skippedCount } = parseAMFIData(rawData, confirmedMap);
       totalDataPoints += parsedCount;
 
       // Merge into global map
@@ -611,7 +642,7 @@ async function main() {
       // Save to disk every 6 chunks to avoid losing too much data on crash
       if ((i + 1) % 6 === 0 || i === chunks.length - 1) {
         process.stdout.write(`  💾 Saving to database...`);
-        const { newSchemes, updatedSchemes } = mergeAndSaveSchemeData(globalSchemeMap);
+        const { newSchemes, updatedSchemes } = mergeAndSaveSchemeData(globalSchemeMap, confirmedMap);
         console.log(` Done (${newSchemes} new, ${updatedSchemes} updated schemes)`);
         globalSchemeMap.clear(); // Free memory after saving
       }
@@ -630,7 +661,7 @@ async function main() {
   // Final save for any remaining data
   if (globalSchemeMap.size > 0) {
     process.stdout.write('💾 Final save to disk...');
-    const { newSchemes, updatedSchemes, allSchemes } = mergeAndSaveSchemeData(globalSchemeMap);
+    const { newSchemes, updatedSchemes, allSchemes } = mergeAndSaveSchemeData(globalSchemeMap, confirmedMap);
     updateMasterSchemeList(allSchemes);
     console.log(` Done (${newSchemes} new, ${updatedSchemes} updated)`);
   }

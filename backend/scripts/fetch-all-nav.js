@@ -201,16 +201,93 @@ function saveCSVLists(allDiscoveredSchemes) {
     }
   }
 
+  const extractCategories = (schemeName, amfiCategoryStr) => {
+    const cat = (amfiCategoryStr || '').toLowerCase();
+    const name = (schemeName || '').toLowerCase();
+
+    let main = 'Other';
+    let sub = 'Other';
+
+    if (name.includes('specialized investment fund') || name.includes('sif ') || name.endsWith(' sif')) {
+      return { main: 'Sectoral & Speciality', sub: 'SIF' };
+    }
+
+    if (cat.includes('debt') || cat.includes('income') || cat.includes('money market') || cat.includes('gilt') || cat.includes('liquid')) {
+      main = 'Debt / Fixed Income';
+      if (cat.includes('banking') || cat.includes('psu') || name.includes('banking & psu') || name.includes('banking and psu')) sub = 'Banking and PSU Fund';
+      else if (cat.includes('corporate bond') || name.includes('corporate bond')) sub = 'Corporate Bond Fund';
+      else if (cat.includes('credit risk') || name.includes('credit risk')) sub = 'Credit Risk Fund';
+      else if (cat.includes('dynamic bond') || cat.includes('dynamic term')) sub = 'Dynamic Bond';
+      else if (cat.includes('gilt')) sub = 'Gilt Fund';
+      else if (cat.includes('liquid')) sub = 'Liquid Fund';
+      else if (cat.includes('low duration')) sub = 'Low Duration Fund';
+      else if (cat.includes('money market')) sub = 'Money Market Fund';
+      else if (cat.includes('overnight')) sub = 'Overnight Fund';
+      else if (cat.includes('short duration') || cat.includes('short term')) sub = 'Short Duration Fund';
+      else sub = 'Other';
+      return { main, sub };
+    }
+
+    if (cat.includes('sectoral') || cat.includes('thematic')) {
+      main = 'Sectoral & Speciality';
+      sub = 'Sectoral';
+      return { main, sub };
+    }
+
+    if (cat.includes('hybrid') || cat.includes('arbitrage') || cat.includes('index') || cat.includes('etf') || cat.includes('solution')) {
+      main = 'Hybrid & Index';
+      if (cat.includes('aggressive')) sub = 'Aggressive Hybrid Fund';
+      else if (cat.includes('arbitrage')) sub = 'Arbitrage Fund';
+      else if (cat.includes('conservative')) sub = 'Conservative Hybrid Fund';
+      else if (cat.includes('dynamic asset') || cat.includes('balanced advantage')) sub = 'Dynamic Asset Allocation';
+      else if (cat.includes('multi asset')) sub = 'Multi Asset Allocation';
+      else if (cat.includes('index') || cat.includes('etf')) sub = 'Index Funds';
+      else if (cat.includes('solution') || cat.includes('children') || cat.includes('retirement')) sub = 'Solution Oriented';
+      else sub = 'Other';
+      return { main, sub };
+    }
+
+    if (cat.includes('equity')) {
+      main = 'Diversified Equity';
+      if (cat.includes('large & mid') || cat.includes('large and mid')) sub = 'Large Cap';
+      else if (cat.includes('large cap') || (name.includes('large cap') && !name.includes('mid'))) sub = 'Large Cap';
+      else if (cat.includes('mid cap') || (name.includes('mid cap') && !name.includes('large'))) sub = 'Mid Cap';
+      else if (cat.includes('small cap') || name.includes('small cap')) sub = 'Small Cap';
+      else if (cat.includes('flexi cap') || cat.includes('flexicap') || name.includes('flexi cap')) sub = 'Flexi Cap';
+      else if (cat.includes('multi cap') || cat.includes('multicap') || name.includes('multi cap')) sub = 'Multi Cap';
+      else if (cat.includes('focused') || name.includes('focused')) sub = 'Focused Fund';
+      else if (cat.includes('elss') || name.includes('elss') || name.includes('tax saver')) sub = 'ELSS';
+      else if (cat.includes('value') || cat.includes('contra') || name.includes('value') || name.includes('contra')) sub = 'Value Fund';
+      else sub = 'Other';
+      return { main, sub };
+    }
+
+    return { main, sub };
+  };
+
   // 2. Process newly discovered schemes
   for (const [code, scheme] of allDiscoveredSchemes) {
-    if (!confirmedMap.has(code) && !inwardMap.has(code)) {
+    if (confirmedMap.has(code)) {
+      // already confirmed, keep it
+    } else if (inwardMap.has(code)) {
+      // keep existing inward properties (including manual changes)
+      // Auto-fill Main Category and Sub Category if they are blank
+      const existing = inwardMap.get(code);
+      if (!existing['Main Category'] || !existing['Sub Category']) {
+        const { main, sub } = extractCategories(scheme.schemeName, scheme.schemeCategory);
+        if (!existing['Main Category']) existing['Main Category'] = main;
+        if (!existing['Sub Category']) existing['Sub Category'] = sub;
+      }
+    } else {
+      // NEW scheme! add to inward
+      const { main, sub } = extractCategories(scheme.schemeName, scheme.schemeCategory);
       inwardMap.set(code, {
         'Scheme Code': code,
         'Scheme Name': scheme.schemeName,
         'Scheme Category': scheme.schemeCategory,
         'Classification': scheme.classification,
-        'Main Category': '',
-        'Sub Category': '',
+        'Main Category': main,
+        'Sub Category': sub,
         'Flag': '', // Explicitly empty for inward file
         'Commission': 'OFF'
       });

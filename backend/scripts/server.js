@@ -303,7 +303,7 @@ app.get('/api/schemes/category/:category', (req, res) => {
   }
 
   if (category === 'sif') {
-    sql += " AND LOWER(schemeCategory) LIKE '%specialized investment fund%'";
+    sql += " AND LOWER(subCategory) = 'sif'";
   } else if (category === 'large cap') {
     sql += " AND (LOWER(subCategory) = 'large cap' OR (LOWER(schemeCategory) LIKE '%large%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%mid%'))";
   } else if (category === 'mid cap') {
@@ -944,7 +944,7 @@ app.post('/api/ranking/calculate', (req, res) => {
     if (categories.length > 0) {
       const catConditions = categories.map(cat => {
         const c = cat.toLowerCase();
-        if (c === 'sif') return "LOWER(schemeCategory) LIKE '%specialized investment fund%'";
+        if (c === 'sif') return "LOWER(subCategory) = 'sif'";
         if (c === 'large cap') return "(LOWER(schemeCategory) LIKE '%large%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%mid%')";
         if (c === 'mid cap') return "(LOWER(schemeCategory) LIKE '%mid%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%large%')";
         if (c === 'small cap') return "(LOWER(schemeCategory) LIKE '%small%' AND LOWER(schemeCategory) LIKE '%cap%')";
@@ -1037,7 +1037,7 @@ app.post('/api/ranking/historical-metrics', (req, res) => {
     if (categories.length > 0) {
       const catConditions = categories.map(cat => {
         const c = cat.toLowerCase();
-        if (c === 'sif') return "LOWER(schemeCategory) LIKE '%specialized investment fund%'";
+        if (c === 'sif') return "LOWER(subCategory) = 'sif'";
         if (c === 'large cap') return "(LOWER(schemeCategory) LIKE '%large%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%mid%')";
         if (c === 'mid cap') return "(LOWER(schemeCategory) LIKE '%mid%' AND LOWER(schemeCategory) LIKE '%cap%' AND LOWER(schemeCategory) NOT LIKE '%large%')";
         if (c === 'small cap') return "(LOWER(schemeCategory) LIKE '%small%' AND LOWER(schemeCategory) LIKE '%cap%')";

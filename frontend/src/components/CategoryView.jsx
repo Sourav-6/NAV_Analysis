@@ -85,7 +85,7 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
         const targetSchemes = Array.from(targetSchemesMap.values());
         
         if (targetSchemes.length === 0) {
-          if (isMounted) setError(`No direct growth funds found for the selected categories.`);
+          if (isMounted) setError(`No ${plan} growth funds found for the selected categories.`);
           return;
         }
 
@@ -145,8 +145,9 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
         setTableData(processedData);
         
       } catch (err) {
-        if (isMounted) setError("Failed to fetch category data.");
-        console.error(err);
+        if (isMounted) setError("Failed to fetch category data: " + (err.message || err));
+        console.error("DEBUG loadCategoryData error:", err);
+        fetch('http://localhost:3001/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: err.message, stack: err.stack }) }).catch(() => {});
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -367,7 +368,7 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
                   onClick={() => handleSort('commission')}
                 >
                   <div className="sortable-header-content">
-                    <span>Comm</span>
+                    <span>Commission</span>
                     <span className="sort-icon">
                       {sortConfig.key === 'commission' ? (
                         sortConfig.direction === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />

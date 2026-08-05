@@ -110,15 +110,15 @@ async function main() {
       startDate = new Date(spg.lastSifDate);
       startDate.setDate(startDate.getDate() + 1); // Start from day after last fetch
     } else {
-      console.log('⚠ No SIF progress found in DB. Running full SIF download from 2024.');
+      console.log(' No SIF progress found in DB. Running full SIF download from 2024.');
     }
   } if (startDate >= endDate) {
-    console.log('✅ SIF Data is already up to date!');
+    console.log(' SIF Data is already up to date!');
     return;
   }
 
-  console.log(`📅 Fetching SIF data from ${formatDateForDisplay(startDate)} to ${formatDateForDisplay(endDate)}`);
-  console.log(`⏱  API calls are rate-limited to 1 request per ${DELAY_MS}ms`);
+  console.log(` Fetching SIF data from ${formatDateForDisplay(startDate)} to ${formatDateForDisplay(endDate)}`);
+  console.log(`  API calls are rate-limited to 1 request per ${DELAY_MS}ms`);
   console.log('');
 
   let currentDate = new Date(startDate);
@@ -131,7 +131,7 @@ async function main() {
   while (currentDate <= endDate) {
     currentDay++;
     const dateStr = formatDateForAPI(currentDate);
-    process.stdout.write(`  [${currentDay}/${maxDays}] 📥 Fetching ${dateStr}... `);
+    process.stdout.write(`  [${currentDay}/${maxDays}]  Fetching ${dateStr}... `);
 
     try {
       const rawData = await fetchUrl(SIF_API_URL + dateStr);
@@ -179,10 +179,10 @@ async function main() {
         });
       }
 
-      console.log(`✅ ${dailyPoints} records`);
+      console.log(` ${dailyPoints} records`);
       successfulDays++;
     } catch (e) {
-      console.log(`❌ Failed: ${e.message}`);
+      console.log(` Failed: ${e.message}`);
     }
 
     currentDate.setDate(currentDate.getDate() + 1);
@@ -191,7 +191,7 @@ async function main() {
 
   console.log('');
   if (totalDataPoints > 0) {
-    console.log(`💾 Merging ${totalDataPoints} SIF data points into database...`);
+    console.log(` Merging ${totalDataPoints} SIF data points into database...`);
     
     let newSchemes = 0;
     let updatedSchemes = 0;
@@ -231,7 +231,7 @@ async function main() {
 
   console.log('');
   console.log('╔══════════════════════════════════════════════════════════════╗');
-  console.log('║                 ✅ SIF DOWNLOAD COMPLETE                    ║');
+  console.log('║                  SIF DOWNLOAD COMPLETE                    ║');
   console.log('╚══════════════════════════════════════════════════════════════╝');
 }
 

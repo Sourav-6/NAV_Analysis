@@ -109,7 +109,7 @@ function fetchUrl(url, retries = MAX_RETRIES) {
 
         if (res.statusCode !== 200) {
           if (attemptsLeft > 0) {
-            console.log(`    ⚠ HTTP ${res.statusCode}, retrying in 5s... (${attemptsLeft} attempts left)`);
+            console.log(`     HTTP ${res.statusCode}, retrying in 5s... (${attemptsLeft} attempts left)`);
             setTimeout(() => makeRequest(attemptsLeft - 1), 5000);
             return;
           }
@@ -122,7 +122,7 @@ function fetchUrl(url, retries = MAX_RETRIES) {
         res.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
         res.on('error', (err) => {
           if (attemptsLeft > 0) {
-            console.log(`    ⚠ Stream error, retrying... (${attemptsLeft} attempts left)`);
+            console.log(`     Stream error, retrying... (${attemptsLeft} attempts left)`);
             setTimeout(() => makeRequest(attemptsLeft - 1), 5000);
           } else {
             reject(err);
@@ -130,7 +130,7 @@ function fetchUrl(url, retries = MAX_RETRIES) {
         });
       }).on('error', (err) => {
         if (attemptsLeft > 0) {
-          console.log(`    ⚠ Request error: ${err.message}, retrying... (${attemptsLeft} attempts left)`);
+          console.log(`     Request error: ${err.message}, retrying... (${attemptsLeft} attempts left)`);
           setTimeout(() => makeRequest(attemptsLeft - 1), 5000);
         } else {
           reject(err);
@@ -138,7 +138,7 @@ function fetchUrl(url, retries = MAX_RETRIES) {
       }).on('timeout', function() {
         this.destroy();
         if (attemptsLeft > 0) {
-          console.log(`    ⚠ Timeout, retrying... (${attemptsLeft} attempts left)`);
+          console.log(`     Timeout, retrying... (${attemptsLeft} attempts left)`);
           setTimeout(() => makeRequest(attemptsLeft - 1), 5000);
         } else {
           reject(new Error(`Timeout for ${url}`));
@@ -336,7 +336,7 @@ function saveCSVLists(allDiscoveredSchemes) {
 }
 
 async function preSyncCSV() {
-  console.log('🔄 Syncing scheme list from AMFI (Generating inward.csv/confirmed.csv)...');
+  console.log(' Syncing scheme list from AMFI (Generating inward.csv/confirmed.csv)...');
   const d = new Date();
   d.setDate(d.getDate() - 3); // 3 days ago to be safe
   const dateStr = formatDateForAMFI(d);
@@ -384,7 +384,7 @@ async function preSyncCSV() {
   }
   
   const confirmedMap = saveCSVLists(allDiscoveredSchemes);
-  console.log(`✅ CSV Sync complete. Found ${allDiscoveredSchemes.size} total schemes, ${confirmedMap.size} confirmed.`);
+  console.log(` CSV Sync complete. Found ${allDiscoveredSchemes.size} total schemes, ${confirmedMap.size} confirmed.`);
   return confirmedMap;
 }
 
@@ -588,7 +588,7 @@ async function main() {
     confirmedMap = await preSyncCSV();
   } else {
     // If nav-only, we skip AMFI discovery and just load the existing confirmed.csv
-    console.log('⏭️ Skipping AMFI list discovery (--nav-only flag). Reading local confirmed.csv...');
+    console.log('️ Skipping AMFI list discovery (--nav-only flag). Reading local confirmed.csv...');
     const rawMap = loadCSVMap(CONFIRMED_CSV);
     confirmedMap = new Map();
     for (const [code, obj] of rawMap.entries()) {
@@ -597,11 +597,11 @@ async function main() {
         confirmedMap.set(code, obj);
       }
     }
-    console.log(`✅ Loaded ${confirmedMap.size} confirmed schemes from disk.`);
+    console.log(` Loaded ${confirmedMap.size} confirmed schemes from disk.`);
   }
 
   // Cleanup Database: Explicitly delete schemes (and their NAV data) that are NOT in the valid confirmed map
-  console.log('🧹 Cleaning up database: removing non-confirmed/false flag schemes...');
+  console.log(' Cleaning up database: removing non-confirmed/false flag schemes...');
   const activeCodes = Array.from(confirmedMap.keys()).map(c => parseInt(c)).join(',');
   let deletedNav = 0;
   let deletedSchemes = 0;
@@ -620,7 +620,7 @@ async function main() {
   console.log(`   Deleted ${deletedSchemes} schemes and ${deletedNav} NAV records.`);
 
   if (isCsvOnly) {
-    console.log('\n✅ CSV Update only requested. Exiting without fetching NAV data.');
+    console.log('\n CSV Update only requested. Exiting without fetching NAV data.');
     process.exit(0);
   }
 
@@ -637,7 +637,7 @@ async function main() {
     for (const codeStr of confirmedMap.keys()) {
       if (!existingCodes.has(parseInt(codeStr))) {
         needsFullDownload = true;
-        console.log(`⚠️ Detected newly added scheme (${codeStr}) with no historical data! Forcing full 15-year download.`);
+        console.log(`️ Detected newly added scheme (${codeStr}) with no historical data! Forcing full 15-year download.`);
         break;
       }
     }
@@ -648,7 +648,7 @@ async function main() {
     const metaRecord = db ? db.prepare("SELECT value FROM metadata WHERE key = 'global_metadata'").get() : null;
     
     if (!metaRecord) {
-      console.log('⚠ No existing data found. Running full download instead.');
+      console.log(' No existing data found. Running full download instead.');
       startDate = new Date();
       startDate.setFullYear(startDate.getFullYear() - YEARS_TO_FETCH);
     } else {
@@ -664,22 +664,22 @@ async function main() {
       startDate.setDate(startDate.getDate() - 3);
       
       if (startDate >= endDate) {
-        console.log('✅ Data is already up to date!');
+        console.log(' Data is already up to date!');
         console.log(`   Last NAV date: ${metadata.lastNavDate}`);
         return;
       }
       
-      console.log(`📅 Fetching data from ${formatDateForDisplay(startDate)} to ${formatDateForDisplay(endDate)}`);
+      console.log(` Fetching data from ${formatDateForDisplay(startDate)} to ${formatDateForDisplay(endDate)}`);
     }
   } else {
     startDate = new Date();
     startDate.setFullYear(startDate.getFullYear() - YEARS_TO_FETCH);
-    console.log(`📅 Fetching ${YEARS_TO_FETCH} years of data: ${formatDateForDisplay(startDate)} → ${formatDateForDisplay(endDate)}`);
+    console.log(` Fetching ${YEARS_TO_FETCH} years of data: ${formatDateForDisplay(startDate)} → ${formatDateForDisplay(endDate)}`);
   }
 
   // Generate monthly chunks
   const chunks = generateMonthlyChunks(startDate, endDate);
-  console.log(`📦 Total chunks to process: ${chunks.length}`);
+  console.log(` Total chunks to process: ${chunks.length}`);
   console.log('');
 
   // Load progress for resume support
@@ -687,7 +687,7 @@ async function main() {
   const startChunkIndex = progress.lastChunkIndex + 1;
 
   if (startChunkIndex > 0 && !isUpdate) {
-    console.log(`🔄 Resuming from chunk ${startChunkIndex + 1}/${chunks.length}`);
+    console.log(` Resuming from chunk ${startChunkIndex + 1}/${chunks.length}`);
   }
 
   // Accumulated scheme data across all chunks
@@ -712,7 +712,7 @@ async function main() {
     const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
 
     console.log(`[${bar}] ${pct}% | Chunk ${chunkNum}/${chunks.length} | ETA: ${etaMin} min`);
-    console.log(`  📥 Fetching: ${chunk.label}`);
+    console.log(`   Fetching: ${chunk.label}`);
 
     try {
       const url = `${AMFI_BASE_URL}?tp=1&frmdt=${formatDateForAMFI(chunk.from)}&todt=${formatDateForAMFI(chunk.to)}`;
@@ -730,7 +730,7 @@ async function main() {
         }
       }
 
-      console.log(`  ✅ Parsed ${parsedCount.toLocaleString()} data points from ${schemeMap.size.toLocaleString()} schemes (${skippedCount} skipped)`);
+      console.log(`   Parsed ${parsedCount.toLocaleString()} data points from ${schemeMap.size.toLocaleString()} schemes (${skippedCount} skipped)`);
 
       // Save progress
       progress.lastChunkIndex = i;
@@ -739,15 +739,15 @@ async function main() {
 
       // Save to disk every 6 chunks to avoid losing too much data on crash
       if ((i + 1) % 6 === 0 || i === chunks.length - 1) {
-        process.stdout.write(`  💾 Saving to database...`);
+        process.stdout.write(`   Saving to database...`);
         const { newSchemes, updatedSchemes } = mergeAndSaveSchemeData(globalSchemeMap, confirmedMap);
         console.log(` Done (${newSchemes} new, ${updatedSchemes} updated schemes)`);
         globalSchemeMap.clear(); // Free memory after saving
       }
 
     } catch (err) {
-      console.error(`  ❌ Failed: ${err.message}`);
-      console.log(`  ⏭ Skipping chunk and continuing...`);
+      console.error(`   Failed: ${err.message}`);
+      console.log(`   Skipping chunk and continuing...`);
     }
 
     // Rate limiting
@@ -758,7 +758,7 @@ async function main() {
 
   // Final save for any remaining data
   if (globalSchemeMap.size > 0) {
-    process.stdout.write('💾 Final save to disk...');
+    process.stdout.write(' Final save to disk...');
     const { newSchemes, updatedSchemes, allSchemes } = mergeAndSaveSchemeData(globalSchemeMap, confirmedMap);
     updateMasterSchemeList(allSchemes);
     console.log(` Done (${newSchemes} new, ${updatedSchemes} updated)`);
@@ -795,7 +795,7 @@ async function main() {
   // Determine the true latest NAV date from the database by parsing the date strings
   let actualLastNavDate;
   
-  process.stdout.write('\n📊 Calculating true metadata (this takes a few seconds)...');
+  process.stdout.write('\n Calculating true metadata (this takes a few seconds)...');
   const distinctDates = db.prepare(`
     SELECT DISTINCT nh.date 
     FROM nav_history nh
@@ -843,7 +843,7 @@ async function main() {
 
   console.log('');
   console.log('╔══════════════════════════════════════════════════════════════╗');
-  console.log('║                    ✅ DOWNLOAD COMPLETE                     ║');
+  console.log('║                     DOWNLOAD COMPLETE                     ║');
   console.log('╠══════════════════════════════════════════════════════════════╣');
   console.log(`║  Total schemes:     ${String(metadata.totalSchemes).padEnd(38)}║`);
   console.log(`║  Data points:       ${String(totalDataPoints.toLocaleString()).padEnd(38)}║`);

@@ -45,10 +45,10 @@ let db;
 let hasData = false;
 
 function loadData() {
-  console.log('📂 Connecting to SQLite database...');
+  console.log(' Connecting to SQLite database...');
   
   if (!fs.existsSync(DB_PATH)) {
-    console.error('❌ Database not found. Run "npm run fetch-data" or migrate script first.');
+    console.error(' Database not found. Run "npm run fetch-data" or migrate script first.');
     return false;
   }
 
@@ -70,15 +70,15 @@ function loadData() {
         risk_free_rate: 0.06
       };
       db.prepare("INSERT INTO metadata (key, value) VALUES ('ranking_config', ?)").run(JSON.stringify(defaultConfig));
-      console.log('  ⚙️ Default ranking config seeded in database.');
+      console.log('  ️ Default ranking config seeded in database.');
     }
 
     const schemeCount = db.prepare('SELECT COUNT(*) as count FROM schemes').get().count;
-    console.log(`  ✅ Connected. Database contains ${schemeCount.toLocaleString()} schemes.`);
+    console.log(`   Connected. Database contains ${schemeCount.toLocaleString()} schemes.`);
     hasData = true;
     return true;
   } catch (err) {
-    console.error('❌ Failed to open database:', err.message);
+    console.error(' Failed to open database:', err.message);
     return false;
   }
 }
@@ -1109,7 +1109,7 @@ app.listen(PORT, () => {
   
   if (!isDataLoaded) {
     console.log('');
-    console.warn('⚠ No data found! Run "npm run fetch-data" to download NAV data.');
+    console.warn(' No data found! Run "npm run fetch-data" to download NAV data.');
   }
   console.log('');
   console.log('');

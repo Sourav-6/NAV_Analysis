@@ -629,7 +629,21 @@ async function main() {
   
   let startDate;
 
-  if (isUpdate) {
+  // Detect if any confirmed schemes are completely missing from the database
+  let needsFullDownload = false;
+  if (isUpdate && activeCodes.length > 0) {
+    const counts = db.prepare(`SELECT schemeCode, COUNT(nav) as c FROM nav_history WHERE schemeCode IN (${activeCodes}) GROUP BY schemeCode`).all();
+    const existingCodes = new Set(counts.map(row => row.schemeCode));
+    for (const codeStr of confirmedMap.keys()) {
+      if (!existingCodes.has(parseInt(codeStr))) {
+        needsFullDownload = true;
+        console.log(`⚠️ Detected newly added scheme (${codeStr}) with no historical data! Forcing full 15-year download.`);
+        break;
+      }
+    }
+  }
+
+  if (isUpdate && !needsFullDownload) {
     // Read last update timestamp
     const metaRecord = db ? db.prepare("SELECT value FROM metadata WHERE key = 'global_metadata'").get() : null;
     

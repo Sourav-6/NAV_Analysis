@@ -81,4 +81,4 @@ When analyzing funds across multiple categories simultaneously (e.g., comparing 
 
 - `/frontend` - Contains the React application, UI components (`CategoryView`, `RankingDashboard`), and API utilities.
 - `/backend` - Contains the Express server (`server.js`), SQLite database schema, web scraping scripts, and the ranking calculation engine.
-- `/backend/data/` - The storage location for the local `database.sqlite` cache.
+- `/backend/data/` - The storage location for the local `database.sqlite` cache..

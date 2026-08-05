@@ -589,7 +589,14 @@ async function main() {
   } else {
     // If nav-only, we skip AMFI discovery and just load the existing confirmed.csv
     console.log('⏭️ Skipping AMFI list discovery (--nav-only flag). Reading local confirmed.csv...');
-    confirmedMap = loadCSVMap(CONFIRMED_CSV);
+    const rawMap = loadCSVMap(CONFIRMED_CSV);
+    confirmedMap = new Map();
+    for (const [code, obj] of rawMap.entries()) {
+      const flag = obj['Flag']?.trim().toUpperCase() || '';
+      if (flag === 'TRUE' || flag === 'Y' || flag === '1' || flag === 'ON') {
+        confirmedMap.set(code, obj);
+      }
+    }
     console.log(`✅ Loaded ${confirmedMap.size} confirmed schemes from disk.`);
   }
 

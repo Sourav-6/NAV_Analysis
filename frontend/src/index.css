@@ -28,6 +28,12 @@
   --accent-primary: #ffffff;
   --accent-secondary: #cccccc;
 
+  /* Continuous Heatmap Colors */
+  --positive-bg-base: 16, 185, 129; /* Emerald */
+  --negative-bg-base: 239, 68, 68; /* Red */
+  --positive-text: #34d399;
+  --negative-text: #f87171;
+
   /* Quartile Cell Colors (Premium Translucent Heatmap for Dark Mode) */
   --q1-bg: rgba(16, 185, 129, 0.25);
   --q1-bg-solid: rgba(16, 185, 129, 0.25); /* Strong Emerald Glow */
@@ -56,6 +62,12 @@
   --text-secondary: #6b7280;
   --accent-primary: #000000;
   --accent-secondary: #4b5563;
+
+  /* Continuous Heatmap Colors */
+  --positive-bg-base: 34, 197, 94; /* Green */
+  --negative-bg-base: 239, 68, 68; /* Red */
+  --positive-text: #166534;
+  --negative-text: #991b1b;
 
   /* Quartile Cell Colors (Solid Premium Pastels for Light Mode) */
   --q1-bg: #bbf7d0;

@@ -13,6 +13,31 @@ const formatReturn = (val) => {
   return `${val > 0 ? '+' : ''}${val.toFixed(2)}%`;
 };
 
+const getHeatmapStyle = (value) => {
+  if (value === -Infinity || value === undefined || isNaN(value)) {
+    return { backgroundColor: 'transparent', color: 'var(--text-secondary)' };
+  }
+  
+  // Cap the scaling at 40% absolute return for maximum intensity
+  const maxScale = 40; 
+  const absVal = Math.abs(value);
+  
+  // Base alpha 0.1, max 0.5 for scaling
+  const alpha = Math.min(absVal / maxScale, 1) * 0.4 + 0.1;
+  
+  if (value >= 0) {
+    return {
+      backgroundColor: `rgba(var(--positive-bg-base), ${alpha})`,
+      color: 'var(--positive-text)'
+    };
+  } else {
+    return {
+      backgroundColor: `rgba(var(--negative-bg-base), ${alpha})`,
+      color: 'var(--negative-text)'
+    };
+  }
+};
+
 const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
   const [categoryGroups, setCategoryGroups] = useState({});
   const [activeTabs, setActiveTabs] = useState([]);
@@ -465,16 +490,13 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
                   {dynamicPeriods.map(p => {
                     const val = scheme.returns[p];
                     const isMissing = val === -Infinity || val === undefined || isNaN(val);
-                    const q = scheme.quartiles[p] || 4; 
+                    const heatmapStyle = getHeatmapStyle(val);
                     
                     return (
                       <td 
                         key={p} 
                         className={`cell-value`}
-                        style={{
-                          backgroundColor: isMissing ? 'transparent' : `var(--q${q}-bg-solid)`,
-                          color: isMissing ? 'var(--text-secondary)' : `var(--q${q}-text)`
-                        }}
+                        style={heatmapStyle}
                       >
                         {formatReturn(val)}
                       </td>

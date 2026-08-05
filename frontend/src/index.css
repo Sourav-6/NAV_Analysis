@@ -29,20 +29,20 @@
   --accent-secondary: #cccccc;
 
   /* Quartile Cell Colors (Premium Translucent Heatmap for Dark Mode) */
-  --q1-bg: rgba(16, 185, 129, 0.15);
-  --q1-bg-solid: rgba(16, 185, 129, 0.15); /* Subtle Emerald Glow */
+  --q1-bg: rgba(16, 185, 129, 0.25);
+  --q1-bg-solid: rgba(16, 185, 129, 0.25); /* Strong Emerald Glow */
   --q1-text: #34d399; /* Vibrant Emerald */
   
-  --q2-bg: rgba(59, 130, 246, 0.15);
-  --q2-bg-solid: rgba(59, 130, 246, 0.15); /* Subtle Blue Glow */
-  --q2-text: #60a5fa; /* Vibrant Blue */
+  --q2-bg: rgba(16, 185, 129, 0.10);
+  --q2-bg-solid: rgba(16, 185, 129, 0.10); /* Subtle Emerald Glow */
+  --q2-text: #6ee7b7; /* Soft Emerald */
   
-  --q3-bg: rgba(234, 179, 8, 0.15);
-  --q3-bg-solid: rgba(234, 179, 8, 0.15); /* Subtle Yellow Glow */
-  --q3-text: #facc15; /* Vibrant Yellow */
+  --q3-bg: rgba(239, 68, 68, 0.10);
+  --q3-bg-solid: rgba(239, 68, 68, 0.10); /* Subtle Red Glow */
+  --q3-text: #fca5a5; /* Soft Red */
   
-  --q4-bg: rgba(239, 68, 68, 0.15);
-  --q4-bg-solid: rgba(239, 68, 68, 0.15); /* Subtle Red Glow */
+  --q4-bg: rgba(239, 68, 68, 0.25);
+  --q4-bg-solid: rgba(239, 68, 68, 0.25); /* Strong Red Glow */
   --q4-text: #f87171; /* Vibrant Red */
 }
 
@@ -58,20 +58,20 @@
   --accent-secondary: #4b5563;
 
   /* Quartile Cell Colors (Solid Premium Pastels for Light Mode) */
-  --q1-bg: #dcfce7;
-  --q1-bg-solid: #dcfce7; /* Light Green */
+  --q1-bg: #bbf7d0;
+  --q1-bg-solid: #bbf7d0; /* Strong Light Green */
   --q1-text: #166534; /* Deeper Green */
   
-  --q2-bg: #dbeafe;
-  --q2-bg-solid: #dbeafe; /* Light Blue */
-  --q2-text: #1e40af; /* Deeper Blue */
+  --q2-bg: #dcfce7;
+  --q2-bg-solid: #dcfce7; /* Soft Light Green */
+  --q2-text: #15803d; /* Deep Green */
   
-  --q3-bg: #fef9c3;
-  --q3-bg-solid: #fef9c3; /* Light Yellow */
-  --q3-text: #854d0e; /* Deeper Yellow */
+  --q3-bg: #fee2e2;
+  --q3-bg-solid: #fee2e2; /* Soft Light Red */
+  --q3-text: #b91c1c; /* Deep Red */
   
-  --q4-bg: #fee2e2;
-  --q4-bg-solid: #fee2e2; /* Light Red */
+  --q4-bg: #fecaca;
+  --q4-bg-solid: #fecaca; /* Strong Light Red */
   --q4-text: #991b1b; /* Deeper Red */
 }
 

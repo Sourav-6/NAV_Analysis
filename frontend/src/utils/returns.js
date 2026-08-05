@@ -159,9 +159,15 @@ export const assignQuartilesByColumn = (schemes) => {
     validValues.forEach((item, sortedIndex) => {
       const percentile = (sortedIndex + 1) / total;
       let q = 4;
-      if (percentile <= 0.25) q = 1;
-      else if (percentile <= 0.50) q = 2;
-      else if (percentile <= 0.75) q = 3;
+      if (total === 1) {
+        q = 1; // If it's the only fund, assign it Q1 (Green)
+      } else if (percentile <= 0.25) {
+        q = 1;
+      } else if (percentile <= 0.50) {
+        q = 2;
+      } else if (percentile <= 0.75) {
+        q = 3;
+      }
       
       schemes[item.index].quartiles[period] = q;
     });

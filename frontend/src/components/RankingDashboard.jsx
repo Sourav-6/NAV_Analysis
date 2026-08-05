@@ -673,13 +673,7 @@ const RankingDashboard = ({ onAddScheme, selectedSchemes = [], plan, referenceDa
     }
   };
 
-  // Helper for rendering percentile badges
-  const getPercentileClass = (score) => {
-    if (score >= 75) return 'q1';
-    if (score >= 50) return 'q2';
-    if (score >= 25) return 'q3';
-    return 'q4';
-  };
+
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xl)', width: '100%' }}>

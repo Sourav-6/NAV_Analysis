@@ -27,3 +27,8 @@ dist-ssr
 *.7z
 *.png
 
+
+backend/data/*.sqlite
+backend/data/*.sqlite-*
+backend/data/inward.csv
+backend/data/notifications.json

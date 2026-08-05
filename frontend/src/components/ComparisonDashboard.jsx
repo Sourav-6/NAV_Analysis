@@ -89,11 +89,15 @@ const RankingAnalysis = ({
     fetchRankings();
   }, [schemes.length, analysisPeriod, rollingWindow, config, referenceDate]);
 
-  const getPercentileClass = (score) => {
-    if (score >= 75) return 'q1';
-    if (score >= 50) return 'q2';
-    if (score >= 25) return 'q3';
-    return 'q4';
+  const getScoreStyle = (score) => {
+    if (score === null || score === undefined || isNaN(score)) {
+      return { backgroundColor: 'var(--panel-bg)', color: 'var(--text-secondary)' };
+    }
+    const hue = (score / 100) * 120;
+    return {
+      backgroundColor: `hsla(${hue}, 80%, 50%, 0.15)`,
+      color: `hsl(${hue}, 80%, 45%)`
+    };
   };
 
   return (
@@ -210,19 +214,19 @@ const RankingAnalysis = ({
                       {fund.overallScore.toFixed(1)}
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <span className={`quartile-badge ${getPercentileClass(fund.dailyLeadership)}`}>{fund.dailyLeadership.toFixed(1)}</span>
+                      <span className="quartile-badge" style={getScoreStyle(fund.dailyLeadership)}>{fund.dailyLeadership.toFixed(1)}</span>
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <span className={`quartile-badge ${getPercentileClass(fund.recentLeadership)}`}>{fund.recentLeadership.toFixed(1)}</span>
+                      <span className="quartile-badge" style={getScoreStyle(fund.recentLeadership)}>{fund.recentLeadership.toFixed(1)}</span>
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <span className={`quartile-badge ${getPercentileClass(fund.sortinoScore)}`}>{fund.sortinoScore.toFixed(1)}</span>
+                      <span className="quartile-badge" style={getScoreStyle(fund.sortinoScore)}>{fund.sortinoScore.toFixed(1)}</span>
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <span className={`quartile-badge ${getPercentileClass(fund.mddScore)}`}>{fund.mddScore.toFixed(1)}</span>
+                      <span className="quartile-badge" style={getScoreStyle(fund.mddScore)}>{fund.mddScore.toFixed(1)}</span>
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <span className={`quartile-badge ${getPercentileClass(fund.ulcerScore)}`}>{fund.ulcerScore.toFixed(1)}</span>
+                      <span className="quartile-badge" style={getScoreStyle(fund.ulcerScore)}>{fund.ulcerScore.toFixed(1)}</span>
                     </td>
                   </tr>
                 );

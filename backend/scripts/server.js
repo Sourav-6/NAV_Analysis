@@ -742,10 +742,10 @@ function computeRankings(parsedSchemes, analysisPeriod, rollingWindow, weights) 
 
     winList.forEach(item => {
       const code = item.schemeCode;
-      const p_return = N > 1 ? 100 * (N - returnRanks[code]) / (N - 1) : 100;
-      const p_sortino = N > 1 ? 100 * (N - sortinoRanks[code]) / (N - 1) : 100;
-      const p_mdd = N > 1 ? 100 * (N - mddRanks[code]) / (N - 1) : 100;
-      const p_ulcer = N > 1 ? 100 * (N - uiRanks[code]) / (N - 1) : 100;
+      const p_return = (item.ret === -Infinity || isNaN(item.ret)) ? 0 : (N > 1 ? 100 * (N - returnRanks[code]) / (N - 1) : 100);
+      const p_sortino = (item.sortino === -Infinity || isNaN(item.sortino)) ? 0 : (N > 1 ? 100 * (N - sortinoRanks[code]) / (N - 1) : 100);
+      const p_mdd = (item.mdd === -Infinity || isNaN(item.mdd)) ? 0 : (N > 1 ? 100 * (N - mddRanks[code]) / (N - 1) : 100);
+      const p_ulcer = (item.ui === -Infinity || isNaN(item.ui)) ? 0 : (N > 1 ? 100 * (N - uiRanks[code]) / (N - 1) : 100);
 
       fundWindowScores[code].push({ 
         date: dateStr, 

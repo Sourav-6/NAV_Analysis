@@ -144,7 +144,13 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
         
         // Determine periods based on keys in the first scheme
         if (processedData.length > 0) {
-           const allKeys = Object.keys(processedData[0].returns);
+           const allKeysSet = new Set();
+           processedData.forEach(scheme => {
+             if (scheme.returns) {
+               Object.keys(scheme.returns).forEach(k => allKeysSet.add(k));
+             }
+           });
+           const allKeys = Array.from(allKeysSet);
            
            // Only keep keys where at least ONE scheme has actual data
            const keys = allKeys.filter(k => processedData.some(scheme => scheme.returns[k] !== -Infinity));

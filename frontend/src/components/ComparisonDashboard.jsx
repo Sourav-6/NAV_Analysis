@@ -93,11 +93,25 @@ const RankingAnalysis = ({
     if (score === null || score === undefined || isNaN(score)) {
       return { backgroundColor: 'var(--panel-bg)', color: 'var(--text-secondary)' };
     }
-    const hue = (score / 100) * 120;
-    return {
-      backgroundColor: `hsla(${hue}, 80%, 50%, 0.15)`,
-      color: `hsl(${hue}, 80%, 45%)`
-    };
+    
+    // score is already 0 to 100
+    const normalized = score / 100;
+    
+    if (normalized >= 0.5) {
+      const intensity = (normalized - 0.5) * 2;
+      const alpha = intensity * 0.4 + 0.05;
+      return {
+        backgroundColor: `rgba(var(--positive-bg-base), ${alpha})`,
+        color: 'var(--positive-text)'
+      };
+    } else {
+      const intensity = (0.5 - normalized) * 2;
+      const alpha = intensity * 0.4 + 0.05;
+      return {
+        backgroundColor: `rgba(var(--negative-bg-base), ${alpha})`,
+        color: 'var(--negative-text)'
+      };
+    }
   };
 
   return (

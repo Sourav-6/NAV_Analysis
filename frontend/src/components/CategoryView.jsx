@@ -13,39 +13,7 @@ const formatReturn = (val) => {
   return `${val > 0 ? '+' : ''}${val.toFixed(2)}%`;
 };
 
-const getHeatmapStyle = (value, min, max) => {
-  if (value === -Infinity || value === undefined || isNaN(value)) {
-    return { backgroundColor: 'transparent', color: 'var(--text-secondary)' };
-  }
-  
-  if (min === undefined || max === undefined || min === max) {
-    return {
-      backgroundColor: 'transparent',
-      color: 'var(--text-secondary)'
-    };
-  }
 
-  // Normalize between 0 and 1
-  const normalized = (value - min) / (max - min);
-  
-  if (normalized >= 0.5) {
-    // Top half -> Green
-    const intensity = (normalized - 0.5) * 2; // 0 to 1
-    const alpha = intensity * 0.4 + 0.05; // 0.05 to 0.45
-    return {
-      backgroundColor: `rgba(var(--positive-bg-base), ${alpha})`,
-      color: 'var(--positive-text)'
-    };
-  } else {
-    // Bottom half -> Red
-    const intensity = (0.5 - normalized) * 2; // 0 to 1
-    const alpha = intensity * 0.4 + 0.05; // 0.05 to 0.45
-    return {
-      backgroundColor: `rgba(var(--negative-bg-base), ${alpha})`,
-      color: 'var(--negative-text)'
-    };
-  }
-};
 
 const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
   const [categoryGroups, setCategoryGroups] = useState({});
@@ -246,25 +214,6 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
     if (!hasB) return -1;
     return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
   });
-
-  const columnStats = React.useMemo(() => {
-    const stats = {};
-    if (dynamicPeriods && dynamicPeriods.length > 0) {
-      dynamicPeriods.forEach(p => {
-        let min = Infinity;
-        let max = -Infinity;
-        sortedData.forEach(scheme => {
-          const val = scheme.returns[p];
-          if (val !== undefined && val !== null && val !== -Infinity && !isNaN(val)) {
-            if (val < min) min = val;
-            if (val > max) max = val;
-          }
-        });
-        stats[p] = { min: min === Infinity ? 0 : min, max: max === -Infinity ? 0 : max };
-      });
-    }
-    return stats;
-  }, [sortedData, dynamicPeriods]);
 
   return (
     <div className="category-view" style={{ width: '100%', maxWidth: '1200px', margin: '0 auto' }}>
@@ -524,14 +473,13 @@ const CategoryView = ({ onSelectScheme, plan, setPlan, referenceDate }) => {
                   {dynamicPeriods.map(p => {
                     const val = scheme.returns[p];
                     const isMissing = val === -Infinity || val === undefined || isNaN(val);
-                    const stats = columnStats[p] || {};
-                    const heatmapStyle = getHeatmapStyle(val, stats.min, stats.max);
+                    const quartile = scheme.quartiles ? scheme.quartiles[p] : null;
+                    const qClass = quartile ? `q${quartile}` : '';
                     
                     return (
                       <td 
                         key={p} 
-                        className={`cell-value`}
-                        style={heatmapStyle}
+                        className={`cell-value ${qClass}`}
                       >
                         {formatReturn(val)}
                       </td>

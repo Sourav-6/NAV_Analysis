@@ -172,12 +172,8 @@ export const assignQuartilesByColumn = (schemes) => {
       schemes[item.index].quartiles[period] = q;
     });
 
-    // Assign Q4 for any scheme that didn't have valid data for this period
-    schemes.forEach(s => {
-      if (s.returns[period] === -Infinity || s.returns[period] === undefined || isNaN(s.returns[period])) {
-         s.quartiles[period] = 4;
-      }
-    });
+    // Missing values will naturally remain undefined since they were filtered out of validValues
+    // and thus won't receive a quartile class, rendering them white/blank as requested.
   });
   
   // Sort overall list by 1Y return descending for better readability

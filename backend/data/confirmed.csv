@@ -4,7 +4,7 @@ Scheme Code,Scheme Name,Scheme Category,Classification,Main Category,Sub Categor
 151406,PGIM India CRISIL IBX Gilt Index - Apr 2028 Fund - Direct Plan,IDCW Option,Open Ended Schemes ( Other Scheme - Index Funds ),Direct,Hybrid & Index,Index Funds,FALSE
 151405,PGIM India CRISIL IBX Gilt Index - Apr 2028 Fund - Regular Plan,IDCW Option,Open Ended Schemes ( Other Scheme - Index Funds ),Regular,Hybrid & Index,Index Funds,FALSE
 990124,iSIF Active Asset Allocator Long-Short Fund - Growth,INF109K30059,Specialized Investment Fund (SIF),Sectoral & Speciality,SIF,,
-990125,iSIF Active Asset Allocator Long-Short Fund - Direct Plan - Growth,INF109K30067,Specialized Investment Fund (SIF),Sectoral & Speciality,SIF,,
+990125,iSIF Active Asset Allocator Long-Short Fund - Direct Plan - Growth,INF109K30067,Specialized Investment Fund (SIF),Sectoral & Speciality,SIF,TRUE,0.2
 990126,iSIF Equity Long-Short Fund - Growth,INF109K30075,Specialized Investment Fund (SIF),Sectoral & Speciality,SIF,,
 990127,iSIF Equity Long-Short Fund - Direct Plan - Growth,INF109K30083,Specialized Investment Fund (SIF),Sectoral & Speciality,SIF,,
 990145,INFINITY HYBRID LONG-SHORT FUND-DIRECT - GROWTH,INF174K30012,Specialized Investment Fund (SIF),Sectoral & Speciality,SIF,,
@@ -93,10 +93,10 @@ Scheme Code,Scheme Name,Scheme Category,Classification,Main Category,Sub Categor
 140292,Edelweiss Banking and PSU Debt Fund - Regular Plan Monthly - IDCW Option,Open Ended Schemes ( Debt Scheme - Banking and PSU Fund ),Regular,Debt / Fixed Income,Banking and PSU Fund,FALSE,OFF
 140289,Edelweiss Banking and PSU Debt Fund - Regular Plan Weekly - IDCW Option,Open Ended Schemes ( Debt Scheme - Banking and PSU Fund ),Regular,Debt / Fixed Income,Banking and PSU Fund,FALSE,OFF
 129008,Franklin India Banking & PSU Debt Fund - Direct - Growth,Open Ended Schemes ( Debt Scheme - Banking and PSU Fund ),Direct,Debt / Fixed Income,Banking and PSU Fund,TRUE,OFF
-129006,Franklin India Banking & PSU Debt Fund - Growth,Open Ended Schemes ( Debt Scheme - Banking and PSU Fund ),Regular,Debt / Fixed Income,Banking and PSU Fund,TRUE,0.1
+129006,Franklin India Banking & PSU Debt Fund - Growth,Open Ended Schemes ( Debt Scheme - Banking and PSU Fund ),Regular,Debt / Fixed Income,Banking and PSU Fund,TRUE,0.05
 129009,Franklin India Banking and PSU Debt Fund - Direct - IDCW,Open Ended Schemes ( Debt Scheme - Banking and PSU Fund ),Direct,Debt / Fixed Income,Banking and PSU Fund,FALSE,OFF
 129007,Franklin India Banking and PSU Debt Fund - IDCW,Open Ended Schemes ( Debt Scheme - Banking and PSU Fund ),Regular,Debt / Fixed Income,Banking and PSU Fund,FALSE,OFF
-128628,HDFC Banking and PSU Debt Fund - Growth Option,Open Ended Schemes ( Debt Scheme - Banking and PSU Fund ),Regular,Debt / Fixed Income,Banking and PSU Fund,TRUE,OFF
+128628,HDFC Banking and PSU Debt Fund - Growth Option,Open Ended Schemes ( Debt Scheme - Banking and PSU Fund ),Regular,Debt / Fixed Income,Banking and PSU Fund,TRUE,0.08
 128629,HDFC Banking and PSU Debt Fund - Growth Option - Direct Plan,Open Ended Schemes ( Debt Scheme - Banking and PSU Fund ),Direct,Debt / Fixed Income,Banking and PSU Fund,TRUE,OFF
 128627,HDFC Banking and PSU Debt Fund - IDCW Option,Open Ended Schemes ( Debt Scheme - Banking and PSU Fund ),Regular,Debt / Fixed Income,Banking and PSU Fund,FALSE,OFF
 128626,HDFC Banking and PSU Debt Fund - IDCW Option - Direct Plan,Open Ended Schemes ( Debt Scheme - Banking and PSU Fund ),Direct,Debt / Fixed Income,Banking and PSU Fund,FALSE,OFF
@@ -4935,6 +4935,7 @@ Scheme Code,Scheme Name,Scheme Category,Classification,Main Category,Sub Categor
 153984,Mirae Asset Infrastructure Fund - Direct Plan - IDCW,Open Ended Schemes ( Equity Schemes - Thematic Fund ),Direct,Sectoral & Speciality,Sectoral,FALSE,OFF
 153985,Mirae Asset Infrastructure Fund - Regular Plan - Growth,Open Ended Schemes ( Equity Schemes - Thematic Fund ),Regular,Sectoral & Speciality,Sectoral,TRUE,OFF
 153986,Mirae Asset Infrastructure Fund - Regular Plan - IDCW,Open Ended Schemes ( Equity Schemes - Thematic Fund ),Regular,Sectoral & Speciality,Sectoral,FALSE,OFF
+154451,NJ Momentum Fund - Direct Growth,Open Ended Schemes ( Equity Schemes - Thematic Fund ),Direct,Sectoral & Speciality,Sectoral,TRUE,OFF
 135341,Groww Value Fund (formerly known as Indiabulls Value Fund) - Direct Plan - Growth Option,Open Ended Schemes ( Equity Schemes - Value Fund ),Direct,Diversified Equity,Value Fund,TRUE,OFF
 135343,Groww Value Fund (formerly known as Indiabulls Value Fund) - Regular Plan - Growth Option,Open Ended Schemes ( Equity Schemes - Value Fund ),Regular,Diversified Equity,Value Fund,TRUE,OFF
 135342,Groww Value Fund (formerly known as Indiabulls Value Fund)- Direct Plan- - Income Distribution cum capital withdrawal Option (Payout & Reinvestment),Open Ended Schemes ( Equity Schemes - Value Fund ),Direct,Diversified Equity,Value Fund,FALSE,OFF

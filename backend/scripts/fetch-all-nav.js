@@ -194,16 +194,8 @@ function saveCSVLists(allDiscoveredSchemes) {
 
   // 1. Check inwardMap for manually edited flags and move them to confirmedMap
   for (const [code, obj] of inwardMap.entries()) {
-    let flag = obj['Flag']?.trim().toUpperCase() || '';
-    let comm = obj['Commission']?.trim().toUpperCase() || '';
-    
-    // Auto-correct if user accidentally typed TRUE in Commission instead of Flag
-    if (flag === '' && (comm === 'TRUE' || comm === 'ON' || comm === 'Y' || comm === '1')) {
-      obj['Flag'] = 'TRUE';
-      flag = 'TRUE';
-    }
-
-    if (flag !== '' || (comm !== '' && comm !== 'OFF' && comm !== 'FALSE')) { 
+    const flag = obj['Flag']?.trim().toUpperCase() || '';
+    if (flag !== '') { // If Flag is manually set to anything (TRUE, FALSE, ON, OFF)
       confirmedMap.set(code, obj);
       inwardMap.delete(code);
     }
@@ -325,7 +317,18 @@ function saveCSVLists(allDiscoveredSchemes) {
     for (const obj of sortedArr) {
       lines.push(headers.map(h => escape(obj[h])).join(','));
     }
-    fs.writeFileSync(filepath, lines.join('\n'));
+    try {
+      fs.writeFileSync(filepath, lines.join('\n'));
+    } catch (err) {
+      if (err.code === 'EBUSY' || err.code === 'EPERM') {
+        console.error(`\n❌ ERROR: Cannot save to ${filepath}`);
+        console.error(`👉 The file is currently OPEN and locked by Excel or WPS Office.`);
+        console.error(`👉 Please CLOSE the file in your spreadsheet app and run the sync again.\n`);
+        process.exit(1);
+      } else {
+        throw err;
+      }
+    }
   };
 
   saveMapToCSV(inwardMap, INWARD_CSV);
@@ -334,22 +337,7 @@ function saveCSVLists(allDiscoveredSchemes) {
   // Return a map of ONLY the TRUE/ON flags from confirmedMap
   const validConfirmedMap = new Map();
   for (const [code, obj] of confirmedMap.entries()) {
-    let flag = obj['Flag']?.trim().toUpperCase() || '';
-    let comm = obj['Commission']?.trim().toUpperCase() || '';
-    
-    // Auto-correct for existing corruptions where Flag is empty but Commission is TRUE
-    if (flag === '' && (comm === 'TRUE' || comm === 'ON' || comm === 'Y' || comm === '1')) {
-      obj['Flag'] = 'TRUE';
-      flag = 'TRUE';
-    }
-    // Auto-correct if Flag got shifted (e.g. contains Category name) but Commission is TRUE
-    if (flag !== 'TRUE' && flag !== 'Y' && flag !== '1' && flag !== 'ON' && flag !== 'FALSE' && flag !== 'OFF' && flag !== '') {
-       if (comm === 'TRUE' || comm === 'ON' || comm === 'Y' || comm === '1') {
-         obj['Flag'] = 'TRUE';
-         flag = 'TRUE';
-       }
-    }
-
+    const flag = obj['Flag']?.trim().toUpperCase() || '';
     if (flag === 'TRUE' || flag === 'Y' || flag === '1' || flag === 'ON') {
       validConfirmedMap.set(code, obj);
     }
